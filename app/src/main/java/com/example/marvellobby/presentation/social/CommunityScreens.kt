@@ -45,6 +45,9 @@ private fun ScreenRenderer.peopleList() {
     field.imeOptions=EditorInfo.IME_ACTION_SEARCH
     field.setOnEditorActionListener { _,_,_->activity.hideKeyboard();true }
     add(field,height=56)
+    add(ui.button("Refresh",false) { social.refreshPeople() }.apply {
+        tag="community:refresh";isEnabled=!page.loading;alpha=if(page.loading)0.5f else 1f
+    },height=52)
     if(page.loading)add(ui.loading())
     page.error?.let { sectionError(it) { social.loadPeople() } }
     if(page.loaded && !page.loading && page.items.isEmpty()) {

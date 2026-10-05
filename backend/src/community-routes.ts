@@ -4,7 +4,7 @@ import type { FastifyInstance,FastifyRequest } from 'fastify';
 import type { Accounts } from './accounts.js';
 import type { Principal } from './contracts.js';
 import { Community,type CommunityEvent,type PageInput } from './community.js';
-import { unauthorized } from './errors.js';
+import { unauthorized,ApiError } from './errors.js';
 
 export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   await app.register(websocket,{options:{maxPayload:256}});
@@ -27,7 +27,15 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   app.get<{Params:{id:string}}>('/v1/community/users/:id',{schema:{params}},async request=>social.publicProfile(await auth(request),request.params.id.toLowerCase()));
   for(const direction of ['followers','following'] as const)app.get<{Params:{id:string};Querystring:PageInput}>(`/v1/community/users/:id/${direction}`,
     {schema:{params,querystring:page}},async request=>social.people(await auth(request),request.query,request.params.id.toLowerCase(),direction));
-  app.post<{Params:{id:string}}>('/v1/community/users/:id/follow',{schema:{params}},async request=>social.follow(await auth(request),request.params.id.toLowerCase(),true));
+  await app.register(async followApi=> {
+    // Older Android clients label an empty POST as a form. Accept only an empty
+    // form on this parameter-only action; other endpoints still require JSON.
+    followApi.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string'},(_request,body,done)=> {
+      if(body!==''){done(new ApiError(400,'INVALID_INPUT','This action does not accept form fields.'));return;}
+      done(null,undefined);
+    });
+    followApi.post<{Params:{id:string}}>('/v1/community/users/:id/follow',{schema:{params}},async request=>social.follow(await auth(request),request.params.id.toLowerCase(),true));
+  });
   app.delete<{Params:{id:string}}>('/v1/community/users/:id/follow',{schema:{params}},async request=>social.follow(await auth(request),request.params.id.toLowerCase(),false));
   app.post<{Body:{userId:string}}>('/v1/community/conversations',{schema:{body:{type:'object',properties:{userId:uuid},required:['userId'],additionalProperties:false}}},
     async request=>social.open(await auth(request),request.body.userId.toLowerCase()));

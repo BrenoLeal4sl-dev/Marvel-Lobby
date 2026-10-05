@@ -26,6 +26,42 @@ class OnlineIdentityTest {
         dao.insertAccount(LocalAccount().apply { email=owner;name="Local";username="local_hero";passwordHash="hash";salt="salt";avatar="" })
     }
 
+    @Test fun followUsesJsonPayloadAndUnfollowKeepsItsDeleteContract()=runBlocking<Unit> {
+        val db=Room.inMemoryDatabaseBuilder(context,MarvelDatabase::class.java).build()
+        try {
+            val user=remote();val target=remote()
+            var secret: SessionSecrets?=null
+            val tokens=object:OnlineTokens {
+                override fun read(owner:String)=secret
+                override fun save(owner:String,secrets:SessionSecrets) { secret=secrets }
+                override fun remove(owner:String) { secret=null }
+            }
+            fun profile(person: UserProfile)=JSONObject().put("id",person.id).put("name",person.name)
+                .put("username",person.username).put("email",person.email).put("bio",person.bio)
+                .put("avatarId",JSONObject.NULL).put("joinedAt","2026-10-01T12:00:00Z")
+            val calls=mutableListOf<Pair<String,JSONObject?>>()
+            val transport=object:LobbyTransport {
+                override val origin="https://example.invalid"
+                override suspend fun request(method:String,path:String,body:JSONObject?,bearer:String?):JSONObject {
+                    if(path=="/v1/auth/login")return JSONObject().put("user",profile(user)).put("accessToken","a".repeat(43))
+                        .put("refreshToken","r".repeat(43)).put("accessExpiresAt","2036-10-01T12:00:00Z")
+                    assertEquals("/v1/community/users/${target.id}/follow",path)
+                    assertEquals("a".repeat(43),bearer);calls.add(method to body)
+                    return JSONObject().put("profile",profile(target)).put("followers",if(method=="POST")1 else 0)
+                        .put("following",0).put("isFollowing",method=="POST").put("followsYou",false).put("isSelf",false)
+                }
+            }
+            val avatars=AvatarRepository(context)
+            val accounts=OnlineAccountRepository(db.archive(),transport,tokens,avatars)
+            accounts.login(user.email,"Password2026")
+            val social=CommunityRepository(accounts,avatars)
+            assertTrue(social.follow(user.ownerKey,target.id!!,true).isFollowing)
+            assertEquals("POST",calls[0].first);assertNotNull(calls[0].second);assertEquals("{}",calls[0].second.toString())
+            assertFalse(social.follow(user.ownerKey,target.id,false).isFollowing)
+            assertEquals("DELETE",calls[1].first);assertNull(calls[1].second)
+        } finally { db.close() }
+    }
+
     @Test fun bindingMergesFavoritesAndHistoryWithoutLosingChatsOrRebinding()=runBlocking<Unit> {
         val db=Room.inMemoryDatabaseBuilder(context,MarvelDatabase::class.java).build()
         try {

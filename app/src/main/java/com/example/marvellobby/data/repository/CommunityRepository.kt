@@ -23,7 +23,8 @@ class CommunityRepository(private val accounts: OnlineAccountRepository,private 
         return CommunityProtocol.people(accounts.communityRequest(owner,"GET",path+query("query" to text,"after" to after)).toString(),::avatar)
     }
     suspend fun profile(owner: String,id: String)=CommunityProtocol.social(accounts.communityRequest(owner,"GET","/v1/community/users/${CommunityProtocol.uuid(id)}").toString(),::avatar)
-    suspend fun follow(owner: String,id: String,add: Boolean)=CommunityProtocol.social(accounts.communityRequest(owner,if(add)"POST" else "DELETE","/v1/community/users/${CommunityProtocol.uuid(id)}/follow").toString(),::avatar)
+    suspend fun follow(owner: String,id: String,add: Boolean)=CommunityProtocol.social(accounts.communityRequest(owner,if(add)"POST" else "DELETE",
+        "/v1/community/users/${CommunityProtocol.uuid(id)}/follow",if(add)JSONObject() else null).toString(),::avatar)
     suspend fun open(owner: String,id: String)=CommunityProtocol.conversation(accounts.communityRequest(owner,"POST","/v1/community/conversations",JSONObject().put("userId",CommunityProtocol.uuid(id))).toString(),::avatar)
     suspend fun inbox(owner: String,offset: Int=0)=CommunityProtocol.inbox(accounts.communityRequest(owner,"GET","/v1/community/conversations"+query("offset" to offset.toString())).toString(),::avatar)
     suspend fun messages(owner: String,id: String,before: Long?=null,after: Long?=null): DirectPage {

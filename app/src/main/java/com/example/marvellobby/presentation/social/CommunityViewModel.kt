@@ -42,7 +42,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     private fun enter() {
         if(!online)return
         when(route.screen) {
-            "community","socialPeople" -> if(state.value.people[route.key]?.loaded!=true)loadPeople()
+            "community","socialPeople" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
             "inbox" -> if(!state.value.inbox.loaded)loadInbox()
             "publicProfile" -> route.userId?.let { loadProfile(it) }
             "profile" -> loadProfile(userId)
@@ -62,6 +62,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                         if(event.type=="ready") {
                             wait=2_000L;mutable.update { it.copy(connected=true,connecting=false) }
                             loadInbox();loadProfile(userId)
+                            if(route.screen in listOf("community","socialPeople") && state.value.people[route.key]?.loading!=true)loadPeople()
                             if(route.screen=="directChat")route.userId?.let { syncChat(it) }
                         }
                         if(event.type=="messages" || event.type=="read") {
@@ -70,6 +71,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                         }
                         if(event.type=="community") {
                             loadProfile(userId)
+                            if(route.screen in listOf("community","socialPeople") && state.value.people[route.key]?.loading!=true)loadPeople()
                             if(route.screen=="publicProfile")route.userId?.let { loadProfile(it) }
                         }
                     }
@@ -106,6 +108,12 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         jobs["people:$key"]?.cancel()
         mutable.update { it.copy(people=it.people+(key to PeopleState(query=query,loading=true))) }
         loadPeople(debounce=true)
+    }
+    fun refreshPeople() {
+        if(!online || state.value.people[route.key]?.loading==true)return
+        loadPeople()
+        loadInbox()
+        loadProfile(userId)
     }
     fun loadPeople(more: Boolean=false,debounce: Boolean=false) {
         if(!online)return

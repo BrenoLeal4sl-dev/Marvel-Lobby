@@ -32,6 +32,7 @@ export async function createApp(db: Database,options: {passwords?:Passwords;logg
     if(failure.statusCode===429) return reply.code(429).send({error:{code:'RATE_LIMITED',message:'Too many attempts. Please try again later.'}});
     if(failure.statusCode===413) return reply.code(413).send({error:{code:'INVALID_INPUT',message:'The request is too large.'}});
     if(failure.statusCode===400) return reply.code(400).send({error:{code:'INVALID_INPUT',message:'Check the supplied fields.'}});
+    if(failure.statusCode===415) return reply.code(415).send({error:{code:'INVALID_INPUT',message:'Use the supported request format.'}});
     // Do not log SQL, bodies, passwords, tokens or connection strings.
     app.log.error({failureCode:failure.code??'INTERNAL',requestId:request.id},'API operation failed');
     return reply.code(500).send({error:{code:'SERVICE_UNAVAILABLE',message:'The service could not complete this request. Please try again.'}});

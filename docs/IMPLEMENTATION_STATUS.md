@@ -260,3 +260,17 @@ Limites: mensagens diretas guardadas no servidor, sem criptografia ponta a ponta
 
 
 Publicação confirmada em 05/10/2026: revisão `9211d8c` enviada ao repositório Marvel-Lobby e endpoints sociais disponíveis no Render. `/health` respondeu HTTP 200; `/v1/community/people` e `/v1/community/conversations` responderam HTTP 401 com JSON fixo de sessão ausente (rotas novas registradas e protegidas). Compilação final após o texto de privacidade também passou. Nenhuma conta de teste foi criada no banco real. Mensagens, nomes e bios fornecidos por usuários são preservados literalmente, sem passar pela tradução dos rótulos da interface.
+
+
+## Atualizar comunidade e corrigir Seguir — 05/10/2026
+
+Reproduzido por HTTPS: POST vazio rotulado `application/x-www-form-urlencoded` no endpoint de seguir retornava 500/SERVICE_UNAVAILABLE antes de chegar à autenticação. O tratamento de erro não preservava o status 415 do parser. O teste anterior de seguir usava requisição sem esse cabeçalho e não cobria o formato produzido pelo cliente.
+
+CommunityRepository agora envia `{}` JSON ao seguir, mantendo DELETE sem corpo para deixar de seguir. O backend aceita somente formulários vazios em um escopo exclusivo do POST de seguir, mantendo validação e autenticação; campos de formulário são rejeitados e outros endpoints continuam exigindo seu formato original. Erros 415 agora são classificados como INVALID_INPUT. A solução usa encapsulamento do parser documentado pelo [Fastify](https://fastify.dev/docs/latest/Reference/ContentTypeParser/). Não exige alteração no PostgreSQL.
+
+Comunidade e listas de seguidores/seguindo têm botão Atualizar, desabilitado durante o carregamento. Mantém a busca, recarrega a primeira página e atualiza caixa de entrada/contadores pessoais; itens anteriores permanecem disponíveis se a tentativa falhar. As listas são revalidadas ao voltar à tela ou reconectar, e a lista social visível reage a eventos de seguir/deixar de seguir.
+
+Os 22 testes do servidor passaram, incluindo a regressão de POST vazio com cabeçalho de formulário, JSON idempotente, autenticação obrigatória, rejeição de campos e manutenção da restrição de formato em login. Nenhuma conta, vínculo ou mensagem de teste foi criada na Aiven. Verificação Android e publicação desta revisão serão registradas abaixo.
+
+
+Android: assembleDebug e lint passaram; os 66 testes unitários passaram. A regressão nativa `followUsesJsonPayloadAndUnfollowKeepsItsDeleteContract` passou no emulador Small_Phone, usando Room temporário e transporte simulado: JSON vazio e Bearer ao seguir, DELETE sem corpo ao deixar de seguir. Não houve instalação no celular. Revisão preparada para publicar no serviço existente; confirmação HTTPS será registrada após a atualização do Render.

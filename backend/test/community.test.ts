@@ -45,6 +45,20 @@ test('following is unilateral and repeated follow/unfollow is idempotent',async(
   assert.equal((await request('POST',`/v1/community/users/${alice.user.id}/follow`,alice)).statusCode,400);
   assert.equal((await request('POST',`/v1/community/users/${randomUUID()}/follow`,alice)).statusCode,404);
 });
+test('Android empty form POST can follow while JSON and authentication remain required elsewhere',async()=> {
+  const path=`/v1/community/users/${bob.user.id}/follow`;
+  const headers={authorization:`Bearer ${alice.accessToken}`,'content-type':'application/x-www-form-urlencoded'};
+  const legacy=await app.inject({method:'POST',url:path,headers,payload:''});
+  assert.equal(legacy.statusCode,200,legacy.body);assert.equal(legacy.json().isFollowing,true);
+  assert.equal(legacy.json().followers,1);
+  const json=await request('POST',path,alice,{});
+  assert.equal(json.statusCode,200,json.body);assert.equal(json.json().followers,1);
+  assert.equal((await app.inject({method:'POST',url:path,headers:{'content-type':'application/x-www-form-urlencoded'},payload:''})).statusCode,401);
+  assert.equal((await app.inject({method:'POST',url:path,headers,payload:'follower_id=someone_else'})).statusCode,400);
+  const account=await app.inject({method:'POST',url:'/v1/auth/login',headers,payload:'email=fake&password=fake'});
+  assert.equal(account.statusCode,415);assert.equal(account.json().error.code,'INVALID_INPUT');
+  assert.equal((await request('DELETE',path,alice)).json().isFollowing,false);
+});
 test('RLS prevents another user from creating or deleting someone else follow',async()=> {
   await request('POST',`/v1/community/users/${bob.user.id}/follow`,alice);
   await assert.rejects(db.transaction(eve.user.id,q=>q.query('INSERT INTO marvel_lobby.follows(follower_id,followed_id) VALUES($1,$2)',[bob.user.id,alice.user.id])),{code:'42501'});

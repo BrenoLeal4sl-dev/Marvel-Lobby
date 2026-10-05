@@ -274,3 +274,6 @@ Os 22 testes do servidor passaram, incluindo a regressão de POST vazio com cabe
 
 
 Android: assembleDebug e lint passaram; os 66 testes unitários passaram. A regressão nativa `followUsesJsonPayloadAndUnfollowKeepsItsDeleteContract` passou no emulador Small_Phone, usando Room temporário e transporte simulado: JSON vazio e Bearer ao seguir, DELETE sem corpo ao deixar de seguir. Não houve instalação no celular. Revisão preparada para publicar no serviço existente; confirmação HTTPS será registrada após a atualização do Render.
+
+
+Publicação da correção confirmada: revisão `60a0888` no GitHub e Render atualizado. A mesma requisição vazia com cabeçalho de formulário que antes retornava 500 agora chega à autenticação e retorna 401 ao receber token deliberadamente inválido; JSON `{}` também retorna 401, e `/health` retorna 200. Esses probes não fazem operações com usuários reais. Fluxos autenticados de seguir/deixar de seguir passaram no banco temporário; validação final no celular fica para a versão atualizada pelo usuário.

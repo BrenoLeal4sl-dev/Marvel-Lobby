@@ -5,7 +5,8 @@ async function main() {
   const config=loadConfig();
   try {
     await checkDatabase(config.database);
-    console.log('Connection verified: TLS certificate, restricted service user, Phase 1 schema and public profile permissions.');
+    const versions=await config.database.query('SELECT version FROM marvel_lobby.schema_migrations ORDER BY version');
+    console.log(`Connection verified: TLS certificate, restricted service user, schema versions ${versions.map(row=>row.version).join(', ')} and table permissions.`);
   } finally { await config.database.close(); }
 }
 main().catch(error=> {

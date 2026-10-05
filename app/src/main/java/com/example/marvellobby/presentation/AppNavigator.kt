@@ -33,8 +33,9 @@ class AppNavigator {
     }
 
     private fun Route.isRestorable(): Boolean = when(screen) {
-        "publicProfile" -> userId?.let { runCatching { java.util.UUID.fromString(it).toString()==it }.getOrDefault(false) }==true
-        "connectAccount" -> true
+        "publicProfile","directChat" -> userId?.let { runCatching { java.util.UUID.fromString(it).toString()==it }.getOrDefault(false) }==true
+        "socialPeople" -> title in setOf("followers","following") && userId?.let { runCatching { java.util.UUID.fromString(it).toString()==it }.getOrDefault(false) }==true
+        "connectAccount","community","inbox" -> true
         "detail" -> type != null && id > 0
         "catalog" -> type != null
         "home", "explore", "search", "filters", "favorites", "ai", "chats", "profile",
@@ -44,7 +45,7 @@ class AppNavigator {
 
     private fun normalize(destination: Route): Route {
         val section = when(destination.screen) {
-            "home", "profile", "editProfile", "settings", "preferences", "about", "privacy", "history", "connectAccount", "publicProfile" -> "home"
+            "home", "profile", "editProfile", "settings", "preferences", "about", "privacy", "history", "connectAccount", "publicProfile", "community", "socialPeople", "inbox", "directChat" -> "home"
             "explore", "catalog", "search", "filters" -> "explore"
             "favorites" -> "favorites"
             "ai", "chats" -> "ai"

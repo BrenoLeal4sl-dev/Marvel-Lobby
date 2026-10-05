@@ -38,4 +38,10 @@ export async function checkDatabase(db: Database): Promise<void> {
   const versions = await db.query('SELECT version FROM marvel_lobby.schema_migrations ORDER BY version');
   if(!versions.some(row => row.version === 2)) throw new Error('Execute the Phase 1 identity migration first.');
   await db.query('SELECT id, username FROM marvel_lobby.public_profiles LIMIT 0');
+  if(versions.some(row=>row.version===3)) {
+    await db.query('SELECT follower_id,followed_id FROM marvel_lobby.follows LIMIT 0');
+    await db.query('SELECT id,user_a,user_b FROM marvel_lobby.direct_conversations LIMIT 0');
+    await db.query('SELECT id,body FROM marvel_lobby.direct_messages LIMIT 0');
+    await db.query('SELECT last_read_id FROM marvel_lobby.direct_reads LIMIT 0');
+  }
 }

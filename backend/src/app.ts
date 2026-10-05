@@ -6,6 +6,7 @@ import { Accounts } from './accounts.js';
 import { ScryptPasswords, AVATARS, type Passwords } from './security.js';
 import { ApiError, unauthorized } from './errors.js';
 import type { RegisterInput, ProfileInput, CredentialInput } from './contracts.js';
+import { communityRoutes } from './community-routes.js';
 
 const string=(minLength=1,maxLength=128)=>({type:'string',minLength,maxLength});
 const profileFields={name:string(2,80),username:string(3,25),bio:string(0,560),avatarId:{type:['integer','null'],enum:[...AVATARS,null]}};
@@ -40,6 +41,7 @@ export async function createApp(db: Database,options: {passwords?:Passwords;logg
     if(!authorization?.startsWith('Bearer ')) unauthorized();
     return accounts.authenticate(authorization.slice(7));
   };
+  await communityRoutes(app,accounts);
   app.get('/health',async()=>({status:'ok',service:'Marvel Lobby'}));
   app.post<{Body:RegisterInput}>('/v1/auth/register',{config:limited,schema:{body:object({
     ...profileFields,email:string(3,254),password:string(8,128)},['name','username','email','password'])}},

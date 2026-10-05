@@ -6,19 +6,19 @@ Você já tem o banco **marvel_mobile** na Aiven. O Render vai executar o progra
 
 O Render precisa receber o código de um repositório. Use um repositório privado. Antes de publicar, mantenha fora dele `local.properties`, qualquer `.env`, `secrets/`, arquivos de certificado, `node_modules/` e pastas de compilação. O projeto tem regras de exclusão, e `backend/.gitignore` também protege a pasta caso ela seja publicada separadamente.
 
-Repositório do projeto: https://github.com/BrenoLeal4sl-dev/Marvel-Lobby. A API ainda não foi publicada no Render.
+Repositório do projeto: https://github.com/BrenoLeal4sl-dev/Marvel-Lobby. API publicada em https://marvel-lobby-api.onrender.com; verificação HTTPS concluída em 05/10/2026.
 
 ## 2. Criar o serviço
 
 1. Entre em https://dashboard.render.com e escolha **New → Web Service**.
 2. Conecte o repositório **BrenoLeal4sl-dev/Marvel-Lobby**.
-3. Nome: `marvel-lobby-api`; linguagem: **Node**; plano: **Free**.
+3. Nome: `marvel-lobby-api`; linguagem: **Docker**; plano: **Free**.
 4. **Root Directory**: `backend`, pois o repositório contém o projeto Android e a API.
-5. **Build Command**: `npm ci --include=dev && npm run build`.
-6. **Start Command**: `node dist/src/server.js`.
+5. **Dockerfile Path**: `Dockerfile`; **Docker Build Context Directory**: `.`. Os caminhos são relativos a `backend`, definido acima.
+6. Deixe **Docker Command** e **Pre-Deploy Command** vazios: a imagem já define a inicialização.
 7. **Health Check Path**: `/health`.
 
-O `render.yaml` na raiz oferece a mesma configuração via Blueprint, com campos secretos pendentes. Ele não cria banco nem inclui senhas. É possível que o primeiro deploy falhe até adicionar o certificado; depois de configurá-lo, faça um novo deploy.
+O serviço atual foi criado manualmente com Docker. O `render.yaml` na raiz oferece uma alternativa Node via Blueprint, com build `npm ci --include=dev && npm run build` e start `node dist/src/server.js`. Ele não cria banco nem inclui senhas. Configure o certificado antes de iniciar o serviço.
 
 ## 3. Configuração privada do banco
 
@@ -44,7 +44,7 @@ Deixe `TRUST_PROXY` ausente até identificar os endereços confiáveis do proxy 
 
 ## 4. Ativar no app
 
-Quando o serviço estiver **Live**, abra `https://endereco-gerado.onrender.com/health`. Deve retornar `{"status":"ok","service":"Marvel Lobby"}`. Me informe **somente a URL HTTPS**; não é necessário enviar outra senha. Essa URL será adicionada a `LOBBY_API_BASE_URL` no `local.properties`, e o app precisará ser recompilado.
+O serviço está **Live**. `https://marvel-lobby-api.onrender.com/health` retornou `{"status":"ok","service":"Marvel Lobby"}`. Essa origem está configurada no `local.properties` deste ambiente. Para outro checkout, acrescente `LOBBY_API_BASE_URL=https://marvel-lobby-api.onrender.com` e recompile. A URL não contém credenciais; nenhuma senha do banco entra no aplicativo.
 
 Com a API ativa: a tela de acesso oferecerá conta online/local; no perfil de uma conta local aparecerá **Conectar conta online**. Confirme a senha local, crie uma identidade online ou conecte uma conta já existente. O app preserva favoritos, histórico e chats de IA neste aparelho. Amigos/mensagens privadas serão implementados nas fases seguintes.
 

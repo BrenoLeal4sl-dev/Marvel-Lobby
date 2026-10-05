@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.marvellobby.MarvelApplication
+import com.example.marvellobby.data.api.ComicVineException
 import com.example.marvellobby.data.model.*
 import com.example.marvellobby.data.repository.*
 import com.google.gson.Gson
@@ -355,10 +356,11 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
         val key=route.key
         val old=state.value.pages[key] ?: BrowseState()
         if(!reset && (old.loading || !old.more)) return
+        if(!reset && old.retryAtNanos?.let { it-System.nanoTime()>0 }==true) return
         jobs[key]?.cancel()
         val generation=(generations[key]?:0)+1; generations[key]=generation
         val base=if(reset) old.copy(items=emptyList(),offset=0,more=true) else old
-        mutable.update { it.copy(pages=it.pages+(key to base.copy(loading=true,error=null))) }
+        mutable.update { it.copy(pages=it.pages+(key to base.copy(loading=true,error=null,retryAtNanos=null))) }
         jobs[key]=viewModelScope.launch {
             try {
                 val page=app.marvel.browse(route.type!!,base.query,base.offset,base.sort,base.marvelOnly)
@@ -371,9 +373,12 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
                 if(generation!=generations[key]) return@launch
                 mutable.update { it.copy(pages=it.pages+(key to base.copy(
                     items=(base.items+entities).distinctBy { item -> item.id },loading=false,
-                    offset=page.nextOffset,more=page.hasMore && page.nextOffset>base.offset,offline=page.offline,error=null))) }
+                    offset=page.nextOffset,more=page.hasMore && page.nextOffset>base.offset,offline=page.offline,error=null,retryAtNanos=null))) }
             } catch(cancelled: CancellationException) { throw cancelled }
-            catch(e: Exception) { if(generation==generations[key]) mutable.update { it.copy(pages=it.pages+(key to base.copy(loading=false,error=error(e)))) } }
+            catch(e: Exception) {
+                val retryAt=(e as? ComicVineException)?.retryAfterSeconds?.coerceIn(0,3600)?.let { System.nanoTime()+it*1_000_000_000L }
+                if(generation==generations[key]) mutable.update { it.copy(pages=it.pages+(key to base.copy(loading=false,error=error(e),retryAtNanos=retryAt))) }
+            }
         }
     }
     fun open(entity: ComicEntity) {
@@ -505,28 +510,18 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
         val forOwner=owner
         mutable.update { it.copy(ai=current.copy(messages=history,sending=true,error=null,conversationId=id)) }
         saved["chatId"]=id
-        val suggested=suggestionSource
+        val suggested=suggestionSource.takeIf { current.messages.none { it.role=="model" } }
         aiJob=viewModelScope.launch {
             try {
                 persistChat(state.value.ai,forOwner)
-                // Details already contain Comic Vine data; reuse them even if the provider now refuses access.
-                val sources=if(current.context!=null) listOf(current.context) else if(suggested!=null) {
-                    val page=app.marvel.browse(suggested.first,suggested.second)
-                    val record=page.items.find { it.name.equals(suggested.second,true) } ?: page.items.firstOrNull()
-                    if(record!=null)listOf(app.marvel.detail(record.type,record.id)) else emptyList()
-                } else {
-                    val cleaned=prompt.replace(Regex("(?i)\\b(quem|é|o|a|os|as|me|explique|sobre|quais|são|who|is|what|tell|about|the|are)\\b")," ")
-                        .replace(Regex("[^\\p{L}\\p{N}\\s-]")," ").replace(Regex("\\s+")," ").trim()
-                    try { app.marvel.search(cleaned.take(100)).take(4) }
-                    catch(cancelled: CancellationException) { throw cancelled }
-                    catch(e: Exception) { emptyList() }
-                }
+                val sources=app.aiContext.records(prompt,current.context,current.sources,suggested)
+                val nextContext=if(current.context!=null || suggested!=null)sources.firstOrNull() else null
                 if(owner!=forOwner || state.value.ai.conversationId!=id)return@launch
-                mutable.update { it.copy(ai=it.ai.copy(context=current.context ?: if(suggested!=null)sources.firstOrNull() else null,sources=sources)) }
+                mutable.update { it.copy(ai=it.ai.copy(context=nextContext,sources=sources)) }
                 persistChat(state.value.ai,forOwner)
                 val answer=app.ai.reply(history,sources,state.value.preferences.language)
                 if(owner!=forOwner || state.value.ai.conversationId!=id)return@launch
-                mutable.update { it.copy(ai=it.ai.copy(context=current.context ?: if(suggested!=null)sources.firstOrNull() else null,messages=history+ChatMessage("model",answer),sending=false,sources=sources)) }
+                mutable.update { it.copy(ai=it.ai.copy(context=nextContext,messages=history+ChatMessage("model",answer),sending=false,sources=sources)) }
                 persistChat(state.value.ai,forOwner)
             } catch(cancelled: CancellationException) { throw cancelled }
             catch(e: Exception) { mutable.update { it.copy(ai=it.ai.copy(sending=false,error=error(e))) } }

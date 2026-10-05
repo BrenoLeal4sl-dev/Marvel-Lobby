@@ -62,6 +62,7 @@ fun ScreenRenderer.publicProfile() {
     add(ui.title(user.name).apply { gravity=Gravity.CENTER })
     add(ui.text("@${user.username}",16,ui.palette.secondary).apply { gravity=Gravity.CENTER },gap=8)
     if(user.bio.isNotBlank())body(user.bio)
+    if(state.user?.online==true)user.id?.let { socialStats(it) }
     label("Member since")
     add(ui.text(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(user.joinedAt)),14),gap=8)
 }

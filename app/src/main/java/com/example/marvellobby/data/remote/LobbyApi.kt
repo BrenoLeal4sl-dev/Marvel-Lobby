@@ -15,7 +15,8 @@ class LobbyApi(baseUrl: String): LobbyTransport {
     override suspend fun request(method: String,path: String,body: JSONObject?,bearer: String?)=withContext(Dispatchers.IO) {
         val base=URI(origin)
         require(base.scheme=="https" && base.host!=null && base.userInfo==null && base.query==null && base.fragment==null && base.path in listOf("","/")) { "Configure an HTTPS address for the online service." }
-        require(path.startsWith("/v1/") && !path.contains("..") && !path.contains('?'))
+        val relative=URI(path)
+        require(relative.path.startsWith("/v1/") && !relative.path.contains("..") && relative.scheme==null && relative.host==null && relative.fragment==null)
         val connection=URI(origin+path).toURL().openConnection() as HttpsURLConnection
         try {
             connection.requestMethod=method;connection.connectTimeout=15_000;connection.readTimeout=30_000
@@ -32,7 +33,8 @@ class LobbyApi(baseUrl: String): LobbyTransport {
                 val output=StringBuilder();val buffer=CharArray(4096)
                 while(true) {
                     val count=reader.read(buffer);if(count<0)break
-                    if(output.length+count>64_000)throw java.io.IOException("Invalid online service response.")
+                    val maximum=if(relative.path.startsWith("/v1/community/"))256_000 else 64_000
+                    if(output.length+count>maximum)throw java.io.IOException("Invalid online service response.")
                     output.append(buffer,0,count)
                 }
                 output.toString()

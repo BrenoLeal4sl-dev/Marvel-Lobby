@@ -77,6 +77,19 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
         require(UUID.fromString(id).toString()==id)
         mutex.withLock { LobbyProtocol.profile(authorized(owner,"GET","/v1/users/$id"),::avatar) }
     }
+    suspend fun communityRequest(owner: String,method: String,path: String,body: JSONObject?=null)=withContext(Dispatchers.IO) {
+        require(path.startsWith("/v1/community/"))
+        mutex.withLock { authorized(owner,method,path,body) }
+    }
+    suspend fun realtimeCredentials(owner: String)=withContext(Dispatchers.IO) {
+        mutex.withLock {
+            // Also validates revocation before each reconnect; refresh stays serialized with HTTP operations.
+            authorized(owner,"GET","/v1/me")
+            (tokens.read(owner) ?: throw expired()).also {
+                require(it.origin==api.origin && owner=="remote:${it.userId}")
+            }
+        }
+    }
     suspend fun bindLocal(localOwner: String,profile: UserProfile)=withContext(Dispatchers.IO) {
         require(profile.online);dao.bindLocalAccount(localOwner,row(profile))
     }

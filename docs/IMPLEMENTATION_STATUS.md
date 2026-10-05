@@ -212,3 +212,48 @@ Validação do backend: 12 testes passaram usando API completa, scrypt real e Po
 Validação nativa: 15 testes distintos passaram no emulador temporário Small_Phone, -read-only, sem instalação no celular. Os cinco testes novos verificam migração Room 3→4, mesclagem/associação idempotente e sem reassociação, preservação e proteção de chats de IA, redirecionamento de escritas antigas, cifragem/isolamento dos tokens e renovação de sessão sem apagar login posterior. Os dez testes anteriores confirmaram contas/migrações 1→4 e 2→4, biblioteca isolada, avatar, teclado e transições. A compilação/lint final também passaram após ajustar a revogação de uma sessão retirada cujo access token já expirou. Backend local temporário encerrado após o health check.
 
 O teste de renovação/logout foi executado novamente após o ajuste final e passou: uma sessão retirada com access token expirado é renovada apenas para revogar sua própria família, sem sobrescrever os tokens de um login posterior. Emulador temporário encerrado ao terminar a validação. Nenhum repositório remoto foi criado e nenhuma publicação foi realizada.
+
+## Ativação da API pública — 05/10/2026
+
+O código foi publicado em https://github.com/BrenoLeal4sl-dev/Marvel-Lobby, preservando a licença inicial e excluindo credenciais/arquivos locais. O usuário publicou o serviço Docker no Render gratuito. A construção da imagem passou; o primeiro início falhou por senha PostgreSQL incorreta (28P01). Após o usuário corrigir a configuração privada no Render, o serviço iniciou.
+
+Verificação pública de leitura: https://marvel-lobby-api.onrender.com/health retornou status ok e serviço Marvel Lobby; GET /v1/me sem sessão retornou HTTP 401. Nenhuma conta de teste foi criada na Aiven. LOBBY_API_BASE_URL foi configurada no local.properties ignorado deste ambiente, mantendo as outras propriedades. assembleDebug passou com a URL injetada no BuildConfig. Nenhuma instalação foi realizada no celular.
+
+A próxima execução pelo Android Studio oferece acesso online e associação explícita da conta local pelo perfil. Cadastro/login e associação no Android contra a hospedagem pública ainda não foram testados de ponta a ponta; testes anteriores validaram esses componentes com ambiente isolado. Dados de favoritos/histórico/chats permanecem no aparelho. Fases sociais 2–4 continuam pendentes.
+
+## Recusa ao paginar equipes — 05/10/2026
+
+O usuário recebeu HTTP 403 ao carregar mais equipes. Uma consulta de leitura independente a /teams/, offset 40 e limit 40, também retornou HTTP 403 sem Retry-After neste computador. Isso confirma uma recusa atual do serviço externo; não confirma credencial inválida nem garante que seja um problema exclusivo do Wi-Fi do celular.
+
+O transporte agora espera pelo menos um segundo após cada consulta antes de abrir a próxima, inclusive nas páginas percorridas pelo filtro Marvel. A espera é suspensa e cancelável. A primeira recusa fornece o prazo mínimo de pausa de 30 segundos ao ViewModel, assim como tentativas durante a pausa. A listagem mantém itens e offset anteriores em falhas; quando já há itens, mostra um aviso específico de paginação. O botão de nova tentativa fica desabilitado com contagem regressiva e é atualizado sem reconstruir a listagem ou alterar sua rolagem; callbacks são removidos ao sair da tela. O app não tenta contornar a recusa e não troca a chave automaticamente. A disponibilidade de novas páginas ainda depende da Comic Vine.
+
+Validação: compilação e lint passaram; 49 testes unitários passaram sem falhas, incluindo três regressões novas para espaçamento entre consultas bem-sucedidas, cancelamento durante a espera e prazo da primeira recusa com bloqueio de novas chamadas prematuras. Não foi feita validação visual no aparelho nesta revisão.
+
+## Nomes em português no Marvel AI — 05/10/2026
+
+Identificado que a busca anterior enviava "foi homem aranha" ao catálogo ao receber "Quem foi o homem aranha?". AiCatalogQuery agora identifica nomes comuns de personagens/equipes/poderes/arcos em português e inglês, normalizando acentos, espaços e hífens. São aliases de busca, sem IDs, descrições ou estatísticas inventadas. O texto original da pergunta permanece no chat. Nomes não mapeados continuam pela busca geral, removendo palavras de pergunta, incluindo o passado "foi/era/was".
+
+AiContextRepository concentra a resolução e recuperação dos dados fora da UI: consulta o recurso correto, prefere o nome exato e carrega seus detalhes. Reaproveita registros já disponíveis em perguntas como "quais são os poderes dele?" e "e os poderes?", inclusive após reabrir uma conversa. Uma menção explícita pode trocar o assunto de um contexto selecionado; sugestões iniciais não fixam o assunto para sempre. Se o detalhe falhar, mantém o resumo recebido; cancelamento não vira sucesso vazio.
+
+A instrução do Gemini reconhece nomes localizados e distingue aliases de busca de evidências do catálogo. Quando não houver registros, pede resposta com conhecimento complementar claramente identificado, sem alegar uma consulta bem-sucedida. Não há chamada extra ao Gemini/Groq para traduzir os nomes. A tabela cobre nomes comuns e não pretende ser um catálogo exaustivo. Consultas Comic Vine ainda podem receber o bloqueio externo descrito acima.
+
+Validação: assembleDebug e lint passaram; 60 testes unitários passaram sem falhas. Os 11 testes novos cobrem nomes localizados/acentos/hífens, múltiplos assuntos, limites de palavras, nomes genéricos, limpeza de perguntas no passado, recuperação de personagem exato, continuidade sem novas consultas, troca explícita de assunto, resumo preservado após falha no detalhe, indisponibilidade do catálogo e cancelamento. Não foi enviado um pedido real ao Gemini nem testado o chat no aparelho nesta revisão; as respostas do modelo ainda precisam ser conferidas na execução do app.
+
+## Resposta direta quando o catálogo está indisponível — 05/10/2026
+
+O usuário confirmou por captura que o nome já era reconhecido, mas o Gemini respondia somente com uma oferta de consultar conhecimento suplementar. AiResponsePolicy agora orienta resposta substantiva no mesmo turno, sem pedir permissão, com uma nota curta sobre conhecimento complementar quando faltam referências. Ausência de registros fornecidos não autoriza afirmar que o personagem não foi encontrado ou não existe na Comic Vine. Pedidos antigos de permissão presentes no histórico são identificados como comportamento a corrigir, não como uma regra para a conversa.
+
+Validação real: duas chamadas curtas ao Gemini configurado localmente, usando a política efetivamente compilada do aplicativo, sem registros Comic Vine. "Quem foi o homem aranha?" recebeu uma explicação direta em português sobre Peter Parker, concluída normalmente, com nota de conhecimento suplementar. O caso com a resposta antiga pedindo permissão no histórico também respondeu diretamente, sem repetir essa confirmação. Não foi usada a Groq nem enviada informação de conta; chaves permaneceram privadas. A compilação e o lint passaram. Não foi executado o chat no aparelho; é necessário executar a versão atualizada e enviar novamente a pergunta. Mensagens já armazenadas não são reescritas.
+
+
+## Comunidade, seguidores e mensagens — 05/10/2026
+
+O pedido atual substitui solicitações de amizade por seguir/seguidores. `004_community.sql` entregue e confirmado executado pelo usuário em `marvel_mobile`. Migração versão 3 é idempotente e preserva dados anteriores. Tabelas de chat direto são distintas da IA; RLS impede acesso de terceiros e falsificação do remetente/leitura.
+
+Backend e Android implementam busca de pessoas por nome/@username com paginação, bio e perfil público, contadores/listas de seguidores e pessoas seguidas, seguir/deixar de seguir, conversa única por par, caixa de entrada, não lidas e leitura, histórico paginado, envio com UUID idempotente e sinais autenticados por WebSocket. O chat preserva o campo nativo durante atualizações, mantém o compositor acima do teclado e recupera novidades ao reconectar. Home/Perfil abrem a Comunidade sem alterar os quatro destinos principais. Textos novos traduzidos PT/EN; identidade social independe da Comic Vine.
+
+Validação: 21 testes de backend passaram com scrypt real/PostgreSQL temporário, incluindo busca sem e-mail, filtros literais, unilateralidade, RLS, par único, reenvio, paginação, leitura monotônica, contagem de não lidas e sinais só para participantes. Bloqueio transacional por conversa ordena alocação/commit dos IDs de envio. Android compilou; lint passou; 66 testes unitários passaram. Um teste nativo no emulador `Small_Phone` passou, verificando que o campo não é recriado ao atualizar a tela e permanece totalmente visível acima do teclado sem navbar. Identidade sintética local sem tokens, sem criar contas ou mensagens na Aiven. Não houve instalação no celular.
+
+A primeira consulta somente de leitura à Aiven passou após a confirmação do usuário; duas tentativas posteriores de conferir versões/permissões terminaram com timeout de conexão deste computador. Isso não altera a migração já executada. Publicação e verificação HTTPS da revisão da comunidade serão registradas abaixo quando concluídas. O teste completo entre duas contas reais pelo celular ainda depende da execução da versão atualizada pelo usuário.
+
+Limites: mensagens diretas guardadas no servidor, sem criptografia ponta a ponta, anexos, push, feed, bloqueio/moderação ou envio offline persistente. Rascunhos/cache sociais ficam em memória; histórico de IA continua no Room. Realtime usa uma instância e pode demorar após suspensão do plano gratuito.

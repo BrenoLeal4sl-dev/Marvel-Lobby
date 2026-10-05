@@ -9,6 +9,7 @@ fun ScreenRenderer.home() {
     label("YOUR NEXT DISCOVERY")
     title("Every power opens\nanother story.")
     searchField(editable=false,gap=24)
+    menu("Community","People · Followers · Messages") { vm.navigate(Route("community")) }
     if(state.home.loading)add(ui.loading())
     state.home.error?.let { sectionError(it) { vm.loadHome() } }
     if(state.home.offline)body("Connection unavailable · showing saved records")

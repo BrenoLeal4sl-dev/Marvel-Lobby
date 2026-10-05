@@ -15,10 +15,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.*
 import androidx.lifecycle.*
 import com.example.marvellobby.presentation.*
+import com.example.marvellobby.presentation.social.*
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private lateinit var vm: MainViewModel
+    lateinit var community: CommunityViewModel
+        private set
+    private var retainedDirectRoot: LinearLayout?=null
+    private var directStyle=""
+    private var directFirst=0L
+    private var directLast=0L
     private var scroll: ScrollView?=null
     private var renderedRoute=""
     private var lastState: AppState?=null
@@ -37,12 +44,15 @@ class MainActivity : AppCompatActivity() {
         screenHost=ScreenTransitionHost(this).apply { tag="screen:host" }
         setContentView(screenHost)
         vm=ViewModelProvider(this)[MainViewModel::class.java]
+        community=ViewModelProvider(this)[CommunityViewModel::class.java]
         onBackPressedDispatcher.addCallback(this,object: OnBackPressedCallback(true) {
             override fun handleOnBackPressed() { goBack() }
         })
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { vm.state.collect { state -> lastState=state;render(state) } }
+                launch { community.state.collect { lastState?.let(::render) } }
+                launch { for(destination in community.navigation)vm.navigate(destination) }
                 launch { for(message in vm.messages)Toast.makeText(this@MainActivity,Translations.text(message,vm.state.value.preferences.language),Toast.LENGTH_SHORT).show() }
             }
         }
@@ -82,6 +92,10 @@ class MainActivity : AppCompatActivity() {
     fun openLink(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url))) }.onFailure { Toast.makeText(this,"No browser available",Toast.LENGTH_SHORT).show() } }
 
     private fun render(state: AppState) {
+        community.route(state.route)
+        val style="${state.preferences.language}:${state.preferences.appearance}"
+        if(state.route.screen=="directChat" && renderedRoute==state.route.key && retainedDirectRoot!=null && directStyle==style) { updateDirectChat(state);return }
+        if(state.route.screen!="directChat")retainedDirectRoot=null
         val chatStyle=state.preferences.language
         if(state.route.screen=="ai" && renderedRoute==state.route.key && retainedChatRoot!=null && retainedChatStyle==chatStyle) {
             updateChat(state)
@@ -110,7 +124,7 @@ class MainActivity : AppCompatActivity() {
             val bars=insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val ime=insets.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,ime.bottom))
-            if(state.route.screen!="ai")navigationBar?.visibility=if(ime.bottom>0)View.GONE else View.VISIBLE
+            if(state.route.screen !in listOf("ai","directChat"))navigationBar?.visibility=if(ime.bottom>0)View.GONE else View.VISIBLE
             insets
         }
         if(state.route.screen=="splash") {
@@ -129,7 +143,11 @@ class MainActivity : AppCompatActivity() {
             if(state.route.screen=="ai") {
                 root.addView(renderer.aiComposer(),LinearLayout.LayoutParams(-1,-2))
             }
-            if(state.route.screen !in listOf("welcome","login","register","filters","ai")) {
+            if(state.route.screen=="directChat") {
+                root.addView(renderer.directComposer(),LinearLayout.LayoutParams(-1,-2))
+                scroll?.setOnScrollChangeListener { _: View, _: Int, _: Int, _: Int, _: Int -> readDirectWhenVisible(state) }
+            }
+            if(state.route.screen !in listOf("welcome","login","register","filters","ai","directChat")) {
                 val style="$isLight:${state.preferences.language}"
                 if(navigationBar==null || style!=navigationStyle) {
                     navigationBar?.stopAnimations()
@@ -149,6 +167,11 @@ class MainActivity : AppCompatActivity() {
         val animateAi=!sameRoute && previousScreen !in listOf("","splash") && (previousScreen=="ai" || state.route.screen=="ai")
         screenHost.show(root,sameRoute,animateAi,state.route.screen=="ai")
         if(state.route.screen=="ai") { retainedChatRoot=root;retainedChatStyle=chatStyle }
+        if(state.route.screen=="directChat") {
+            retainedDirectRoot=root;directStyle=style
+            val messages=community.state.value.chats[state.route.userId]?.messages.orEmpty()
+            directFirst=messages.firstOrNull()?.id ?: 0;directLast=messages.lastOrNull()?.id ?: 0
+        }
         navigationBar?.select(state.route.section ?: "home")
         renderedRoute=state.route.key
         ViewCompat.requestApplyInsets(root)
@@ -157,7 +180,8 @@ class MainActivity : AppCompatActivity() {
         val activeScroll=scroll
         activeScroll?.post {
             if(scroll===activeScroll && renderedRoute==state.route.key) {
-                if(state.route.screen=="ai" && state.ai.messages.isEmpty())activeScroll.scrollTo(0,0)
+                if(state.route.screen=="directChat") { activeScroll.scrollTo(0,activeScroll.getChildAt(0).height);readDirectWhenVisible(state) }
+                else if(state.route.screen=="ai" && state.ai.messages.isEmpty())activeScroll.scrollTo(0,0)
                 else if(scrollChat)activeScroll.scrollTo(0,activeScroll.getChildAt(0).height)
                 else activeScroll.scrollTo(0,vm.scrollPositions[state.route.key] ?: 0)
             }
@@ -189,6 +213,45 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+    private fun readDirectWhenVisible(state: AppState) {
+        val view=scroll ?: return
+        if(state.route.screen=="directChat" && view.childCount>0 && view.scrollY+view.height>=view.getChildAt(0).height-24)
+            state.route.userId?.let { community.markRead(it) }
+    }
+    private fun updateDirectChat(state: AppState) {
+        val root=retainedDirectRoot ?: return
+        val view=scroll ?: return
+        val id=state.route.userId ?: return
+        val chat=community.state.value.chats[id]
+        val messages=chat?.messages.orEmpty()
+        val first=messages.firstOrNull()?.id ?: 0L
+        val last=messages.lastOrNull()?.id ?: 0L
+        val oldY=view.scrollY
+        val oldHeight=if(view.childCount>0)view.getChildAt(0).height else 0
+        val wasBottom=oldY+view.height>=oldHeight-48
+        val older=directFirst>0 && first<directFirst
+        val newMessage=last!=directLast
+        val light=state.preferences.appearance=="light" || (state.preferences.appearance=="system" && resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_NO)
+        val ui=UiKit(this,Palette(light)) { Translations.text(it,state.preferences.language) }
+        view.removeAllViews();view.addView(ScreenRenderer(this,vm,state,ui).render())
+        val field=root.findViewById<EditText>(0x01000000 or ("direct:$id".hashCode() and 0x00FFFFFF))
+        val draft=community.drafts[id].orEmpty()
+        if(field.text.toString()!=draft) { field.setText(draft);field.setSelection(draft.length) }
+        root.findViewWithTag<View>("direct:send")?.apply {
+            isEnabled=chat?.loaded==true && chat.pending==null && !chat.sending
+            alpha=if(isEnabled)1f else 0.4f
+        }
+        directFirst=first;directLast=last
+        view.post {
+            if(scroll===view && vm.state.value.route.key==state.route.key) {
+                val height=view.getChildAt(0).height
+                if(older)view.scrollTo(0,oldY+(height-oldHeight))
+                else if(newMessage && (wasBottom || messages.lastOrNull()?.senderId==community.userId))view.scrollTo(0,height)
+                else view.scrollTo(0,oldY)
+                readDirectWhenVisible(state)
+            }
+        }
+    }
     private fun header(state: AppState,ui: UiKit): View {
         val row=ui.row().apply { setPadding(ui.dp(20),ui.dp(10),ui.dp(20),ui.dp(10)) }
         if(state.route.screen=="home") {
@@ -203,6 +266,8 @@ class MainActivity : AppCompatActivity() {
             val title=when(state.route.screen) {
                 "login","register"->"Account";"editProfile"->"Edit Profile";"privacy"->"Privacy & terms"
                 "connectAccount"->"Connect online account";"publicProfile"->"Public profile"
+                "community"->"Community";"inbox"->"Messages";"directChat"->"Messages"
+                "socialPeople"->if(state.route.title=="following")"Following" else "Followers"
                 "history"->"Recently Viewed";"chats"->"Conversation history";"ai"->"Marvel AI";"catalog"->when(state.route.type?.name) {
                     "CHARACTER"->"Characters";"TEAM"->"Teams";"POWER"->"Powers";else->"Story Arcs"
                 }
@@ -221,7 +286,12 @@ class MainActivity : AppCompatActivity() {
         }
         return row
     }
+    override fun onStart() {
+        super.onStart()
+        community.foreground(true)
+    }
     override fun onStop() {
+        community.foreground(false)
         super.onStop()
         vm.hideSensitive()
     }
@@ -229,6 +299,7 @@ class MainActivity : AppCompatActivity() {
         avatarDialog?.dismiss()
         screenHost.dispose()
         retainedChatRoot=null
+        retainedDirectRoot=null
         credentialSignal?.cancel()
         scroll?.let { vm.scrollPositions[renderedRoute]=it.scrollY }
         navigationBar?.stopAnimations()

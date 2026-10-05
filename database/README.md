@@ -105,3 +105,10 @@ Validação em 05/10/2026: os 17 testes existentes e 13 verificações novas da 
 Referências: [pgAdmin na Aiven](https://aiven.io/docs/products/postgresql/howto/connect-pgadmin), [service users](https://aiven.io/docs/products/postgresql/howto/manage-service-users), [privilégios administrativos](https://aiven.io/docs/products/postgresql/concepts/dba-tasks-pg), [RLS PostgreSQL](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
 
 Atualização da conexão — 05/10/2026: o usuário instalou o esquema no banco **marvel_mobile** e concedeu permissões ao service user **marvel_lobby_api**. A conexão real foi verificada com TLS/hostname e CA válidos, função sem superprivilégios/bypass/posse do schema, versão do esquema e leitura da view pública. O backend iniciou com essa configuração e respondeu ao health check local. Nenhuma conta de teste foi criada na Aiven. A publicação HTTPS no Render está preparada em [docs/RENDER_SETUP.md](../docs/RENDER_SETUP.md), ainda pendente.
+
+
+## Comunidade — seguir e chat
+
+Após a identidade online e as permissões, execute inteiro `004_community.sql` no Query Tool do banco **marvel_mobile**, conectado como administrador. O usuário confirmou a execução em 05/10/2026. Ele acrescenta a versão 3 com `follows`, `direct_conversations`, `direct_messages` e `direct_reads`, índices, grants restritos e políticas RLS. Preserva contas, catálogo, biblioteca e tabelas de IA. Reexecutar o arquivo não apaga nem recria dados existentes.
+
+O par de participantes é único, seguir não exige aceitação, mensagem usa identidade de envio para idempotência, leitura só avança. API deve verificar uma sessão válida e definir `app.user_id` no mesmo contexto transacional das consultas. Não conceda privilégios administrativos ao usuário da API. Mensagens diretas permanecem no servidor; tabelas antigas de IA não são reutilizadas para elas.

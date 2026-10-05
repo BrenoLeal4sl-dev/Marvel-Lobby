@@ -24,6 +24,14 @@ export class Accounts {
   constructor(private readonly db: Database, private readonly passwords: Passwords) {}
   async initialize(): Promise<void> { this.dummyHash = await this.passwords.hash(token()); }
 
+  async authorized<T>(principal: Principal,action:(query:Query)=>Promise<T>):Promise<T> {
+    return this.db.transaction(principal.userId,async query=> {
+      await this.lockUser(query,principal.userId);
+      await this.lockSession(query,principal);
+      return action(query);
+    });
+  }
+
   private async account(query: Query, id: string): Promise<AccountProfile> {
     const row = (await query.query(`SELECT u.id,u.email,p.display_name,p.username,p.bio,p.avatar_id,u.created_at AS joined_at
       FROM marvel_lobby.users u JOIN marvel_lobby.profiles p ON p.user_id=u.id

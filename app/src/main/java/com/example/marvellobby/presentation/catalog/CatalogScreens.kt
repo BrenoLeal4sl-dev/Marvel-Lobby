@@ -3,6 +3,7 @@ package com.example.marvellobby.presentation.catalog
 import com.example.marvellobby.presentation.*
 import com.example.marvellobby.data.model.*
 import android.widget.*
+import android.view.View
 
 fun ScreenRenderer.catalog() {
      val route=state.route;val page=state.pages[route.key] ?: BrowseState(loading=true)
@@ -40,13 +41,43 @@ fun ScreenRenderer.catalog() {
          add(row,gap=12)
      }
      if(page.loading)add(ui.loading(if(page.power.isNotBlank())"Checking powers in the current page…" else "Loading the archive…"))
-     if(page.error!=null)sectionError(page.error) { vm.loadPage() }
+     if(page.error!=null) {
+         if(page.items.isEmpty())title("Something went wrong")
+         else {
+             label("Couldn't load the next page")
+             body("Your loaded records are still available. Try again shortly to continue.")
+         }
+         body(page.error.substringBefore(" Nova tentativa disponível em "))
+         paginationRetry(page.retryAtNanos) { vm.loadPage() }
+     }
      if(page.items.isEmpty() && !page.loading && page.error==null) {
          title(if(page.more)"Continue exploring" else "No results")
          body(if(page.more)"No matches in the pages checked so far. There are more records to explore." else "Try a different name or remove filters.")
      }
      if(page.more && !page.loading && page.error==null)button("Load more",false) { vm.loadPage() }
  }
+
+/** Update only the retry control; don't rebuild the list or disturb its scroll position each second. */
+private fun ScreenRenderer.paginationRetry(deadline: Long?,retry: ()->Unit) {
+    val control=ui.button("Try again",false,retry)
+    val ticker=object : Runnable {
+        override fun run() {
+            val remaining=deadline?.let { (it-System.nanoTime()).coerceAtLeast(0) } ?: 0L
+            val seconds=(remaining+999_999_999L)/1_000_000_000L
+            control.isEnabled=seconds==0L
+            control.alpha=if(control.isEnabled)1f else .55f
+            control.text=if(seconds>0)"${ui.translate("Try again in")} ${seconds}s" else ui.translate("Try again")
+            control.contentDescription=control.text
+            if(seconds>0 && control.isAttachedToWindow)control.postDelayed(this,250)
+        }
+    }
+    control.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) { ticker.run() }
+        override fun onViewDetachedFromWindow(view: View) { control.removeCallbacks(ticker) }
+    })
+    ticker.run()
+    add(control,height=52)
+}
 fun ScreenRenderer.filters() {
      val page=state.pages[Route("catalog",ResourceType.CHARACTER).key] ?: BrowseState()
      label("REFINE THE ARCHIVE");title("Filters")

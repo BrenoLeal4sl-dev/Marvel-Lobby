@@ -1,6 +1,6 @@
-# API do Marvel Lobby — identidade online
+# API do Marvel Lobby — identidade e comunidade
 
-Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. A primeira fase cobre cadastro, login, sessões e perfil. Amigos, solicitações, mensagens privadas, notificações e sincronização da biblioteca ainda não fazem parte desta versão. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
+Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, seguir/seguidores e mensagens privadas. Solicitações de amizade, push e sincronização da biblioteca não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
 
 ## Rodar no computador
 
@@ -20,16 +20,16 @@ Configuração: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSL
 
 O padrão é `http://127.0.0.1:4100` para desenvolvimento local. `/health` responde o estado do processo. `HOST` e `PORT` podem ser definidos na hospedagem. Para o Android, é obrigatório um endereço **HTTPS** público com certificado válido; uma URL do PostgreSQL não substitui essa URL. O aplicativo não permite transporte HTTP nem redirecionamento de credenciais.
 
-## Publicação pendente
+## Publicação no Render
 
-Foi escolhido começar pelo plano gratuito do Render; ainda não existe uma API pública. O guia está em [docs/RENDER_SETUP.md](../docs/RENDER_SETUP.md), e `render.yaml` prepara um serviço Node com `rootDir: backend`. O `Dockerfile` oferece uma alternativa de contêiner, mas a imagem não foi construída neste ambiente. Construa com o contexto `backend`; configure as variáveis PG por segredos da hospedagem e monte o CA fora da imagem, por exemplo com `PGSSLROOTCERT=/run/secrets/ca.pem`. O serviço deve encerrar HTTPS no proxy da plataforma e encaminhar ao processo na porta configurada.
+O serviço gratuito está publicado em `https://marvel-lobby-api.onrender.com`. Em 05/10/2026, a imagem Docker foi construída no Render, o processo iniciou com a Aiven e `/health` respondeu por HTTPS; `/v1/me` sem sessão respondeu 401. O guia está em [docs/RENDER_SETUP.md](../docs/RENDER_SETUP.md). O serviço usa `rootDir: backend`, Dockerfile `Dockerfile` e contexto `.`; variáveis PG e certificado CA ficam nos segredos da hospedagem, com `PGSSLROOTCERT=/etc/secrets/ca.pem`. O `render.yaml` oferece uma alternativa de serviço Node. A hospedagem encerra HTTPS e encaminha ao processo na porta configurada.
 
 Defina `TRUST_PROXY` apenas com os endereços/CIDRs documentados do proxy real da hospedagem. Sem essa variável, cabeçalhos de IP encaminhado não são confiados. Não use confiança irrestrita: isso permitiria contornar o limite de tentativas. Os limites são em memória por processo; esta versão é adequada para uma instância. Múltiplas instâncias exigirão um limitador compartilhado. Reserve memória para o scrypt (até duas operações de aproximadamente 128 MiB cada), além do Node.
 
-Depois da publicação, acrescente ao `local.properties` do Android:
+Para ativar a identidade online, acrescente ao `local.properties` do Android (já configurado neste ambiente):
 
 ```properties
-LOBBY_API_BASE_URL=https://seu-endereco-da-api
+LOBBY_API_BASE_URL=https://marvel-lobby-api.onrender.com
 ```
 
 Use a origem sem caminho, consulta ou credenciais. Recompile o app. Com a propriedade vazia/ausente, o acesso local atual permanece disponível; botões de conexão online não aparecem. Nenhuma credencial PG é incluída no APK.
@@ -66,3 +66,31 @@ npm test
 ```
 
 Os testes exercitam a API completa com PostgreSQL temporário em PGlite e scrypt real. Não acessam nem criam usuários na Aiven. Cobrem isolamento, duplicidade, validação, perfil público, edição atômica de credenciais/perfil, rotação/reutilização/revogação, expiração, conta desativada e limite de tentativas. A conexão Aiven foi conferida separadamente com consultas somente de leitura.
+
+
+## Comunidade e mensagens diretas
+
+Instale `database/004_community.sql` como administrador no banco `marvel_mobile`; o usuário confirmou a execução em 05/10/2026. A migração é transacional e pode ser repetida. Não reutiliza nem apaga as tabelas de conversa de IA. Sem a versão 3, os endpoints sociais retornam `503 COMMUNITY_NOT_READY`; a identidade continua disponível.
+
+Todos os endpoints abaixo exigem Bearer token. Perfis incluem apenas nome, @username, bio, avatar aprovado e data de entrada. A busca não consulta e-mails. Seguir é unilateral, idempotente e não exige aprovação; seguir a própria conta é proibido.
+
+| Método e caminho | Comportamento |
+|---|---|
+| `GET /v1/community/people` | Busca `query` por nome/@username; cursor `after`, `limit` de até 30 |
+| `GET /v1/community/users/:id` | Perfil, seguidores/seguindo, relação com quem consulta |
+| `GET /v1/community/users/:id/followers` | Seguidores paginados, busca e cursor |
+| `GET /v1/community/users/:id/following` | Pessoas seguidas, busca e cursor |
+| `POST /v1/community/users/:id/follow` | Segue a pessoa |
+| `DELETE /v1/community/users/:id/follow` | Deixa de seguir |
+| `POST /v1/community/conversations` | `{userId}`; abre ou recupera a conversa única do par |
+| `GET /v1/community/conversations` | Caixa de entrada, `offset`, até 30 itens, última mensagem e não lidas |
+| `GET /v1/community/conversations/:id/messages` | Até 40 mensagens, `before` ou `after` (IDs como strings); ordenadas cronologicamente, com leitura do destinatário |
+| `POST /v1/community/conversations/:id/messages` | `{text,clientId}`; UUID de envio impede duplicar tentativas; texto de 1–2000 caracteres Unicode |
+| `POST /v1/community/conversations/:id/read` | `{lastId}` como string; leitura só avança e deve apontar para mensagem da conversa |
+| `WSS /v1/community/live` | Bearer no cabeçalho; sinais `ready`, `community`, `messages`, `read` |
+
+RLS limita conversa, texto e leitura aos dois participantes. A API valida a sessão dentro da transação e verifica o destinatário ativo. O envio usa um bloqueio transacional por conversa antes de alocar IDs, evitando lacunas na busca incremental causadas por commits fora de ordem. Reenvio com a mesma identidade e texto devolve a mensagem salva; reutilização para outro texto retorna 409. Limite de 40 envios/minuto por IP, além do limite global.
+
+WebSocket envia apenas sinais, sem corpo das mensagens. Depois do sinal, o Android consulta HTTPS autenticado; preserva rascunho/teclado e mescla respostas repetidas. Ao reconectar, recupera mensagens novas. Leitura é enviada quando o usuário está vendo o fim da conversa. O histórico de mensagens diretas fica no PostgreSQL e é recuperável em outro dispositivo com a mesma conta; os chats de IA continuam locais. Rascunhos e cache social são temporários, não há envio offline em segundo plano.
+
+O realtime e o limitador usam memória de uma instância. Escalar requer distribuição dos eventos/limites. O plano gratuito pode suspender o servidor, causando demora na reconexão. Transporte usa TLS; não há criptografia de ponta a ponta, anexos, moderação, bloqueio de usuários, push ou feed neste pedido.

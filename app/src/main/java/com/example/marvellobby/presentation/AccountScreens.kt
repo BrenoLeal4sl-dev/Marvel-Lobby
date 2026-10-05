@@ -4,6 +4,7 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import com.example.marvellobby.BuildConfig
 import com.example.marvellobby.presentation.social.bioField
+import com.example.marvellobby.presentation.social.socialStats
 
 fun ScreenRenderer.profile() {
     val user=state.user ?: return
@@ -14,6 +15,9 @@ fun ScreenRenderer.profile() {
     },gap=8) else body("Continue as guest")
     if(user.online) {
         if(user.bio.isNotBlank())body(user.bio)
+        user.id?.let { socialStats(it) }
+        menu("Community","People · Followers · Messages") { vm.navigate(Route("community")) }
+        menu("Messages") { vm.navigate(Route("inbox")) }
         label("Member since")
         add(ui.text(java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(user.joinedAt)),14),gap=8)
         menu("Public profile","See what other users can see") { vm.navigate(Route("publicProfile",userId=user.id)) }
@@ -117,6 +121,8 @@ fun ScreenRenderer.privacy() {
         label("ONLINE ACCOUNT")
         body("When you choose an online account, your name, username, biography, approved avatar and email are sent to the Marvel Lobby server over HTTPS. The server stores a password hash. Your public profile includes your name, username, biography, avatar and join date, without your email or password. Connecting a local account keeps its favorites, history and AI conversations on this device; they are not uploaded.")
     }
+    label("Community")
+    body("Following connections and direct messages are stored on the Marvel Lobby server. Only the two participants can access a direct conversation through the app. AI chats remain separate and local.")
     label("COMIC VINE")
     body("Search terms and record requests are sent to Comic Vine to load the catalog. Images are downloaded from the image addresses supplied by Comic Vine.")
     label("MARVEL AI")

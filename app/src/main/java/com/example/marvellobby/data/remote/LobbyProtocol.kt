@@ -37,6 +37,9 @@ object LobbyProtocol {
             "INVALID_INPUT" -> "Check your input."
             "USER_NOT_FOUND" -> "This profile is unavailable."
             "RATE_LIMITED" -> "Too many attempts. Please try again later."
+            "COMMUNITY_NOT_READY" -> "Community is being updated. Please try again shortly."
+            "CONVERSATION_NOT_FOUND" -> "This conversation is unavailable."
+            "MESSAGE_CONFLICT" -> "This message could not be resent. Check the conversation before sending it again."
             else -> "The online service is unavailable. Please try again."
         }
         return LobbyApiException(code,status,message)

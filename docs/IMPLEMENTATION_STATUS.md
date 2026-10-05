@@ -277,3 +277,17 @@ Android: assembleDebug e lint passaram; os 66 testes unitários passaram. A regr
 
 
 Publicação da correção confirmada: revisão `60a0888` no GitHub e Render atualizado. A mesma requisição vazia com cabeçalho de formulário que antes retornava 500 agora chega à autenticação e retorna 401 ao receber token deliberadamente inválido; JSON `{}` também retorna 401, e `/health` retorna 200. Esses probes não fazem operações com usuários reais. Fluxos autenticados de seguir/deixar de seguir passaram no banco temporário; validação final no celular fica para a versão atualizada pelo usuário.
+
+
+## Ícone de enviar e revisão do realtime — 05/10/2026
+
+O chat direto apontava para `assets/icons/send.svg`, que não existe. Passou a usar o vetor nativo `R.drawable.ic_send`, empacotado no app, dentro de um botão vermelho e com ícone branco. Não depende de download ou SVG externo. O campo continua sendo um compositor multilinha de mensagem.
+
+WebSocket autenticado já estava implementado. Foi verificado agora com conexões TCP/WebSocket reais em localhost, além do teste anterior com injeção: três clientes, mensagens e leitura chegando aos dois participantes, sem vazamento para o terceiro; recuperar mensagens perdidas após desconectar/reconectar. PostgreSQL temporário e contas sintéticas, sem criação de contas/mensagens na Aiven. A transmissão do texto permanece em HTTPS com idempotência; WebSocket sinaliza imediatamente as mudanças e o Android consulta/exibe o conteúdo automaticamente.
+
+Corrigida uma corrida do cliente: uma confirmação do próprio envio podia inserir ID 3 no cache antes de receber ID 2 de outra pessoa. Usar o maior ID do cache na próxima busca faria pular ID 2. `syncedThrough` agora avança apenas por páginas recebidas, não por ACK de envio; mesclagem mantém uma bolha por mensagem. Leitura usa esse cursor confirmado, páginas antigas não o avançam, e confirmação de leitura não recua. A rolagem considera também mudanças na quantidade de mensagens, para acompanhar uma mensagem recuperada entre registros já exibidos.
+
+23 testes de backend passaram, incluindo a nova verificação com WebSocket real e recuperação após reconectar. Três regressões unitárias Android foram adicionadas para ACK antes da mensagem anterior, repetição/páginas antigas e primeiro envio após histórico vazio. A verificação nativa também confere presença e centralização do drawable de enviar, incluindo estado offline.
+
+
+Validação final desta revisão: assembleDebug e lint passaram; 69 testes unitários Android passaram. A primeira tentativa nativa foi interrompida por ANR do System UI do emulador durante a inicialização, antes de abrir o chat; após recuperar a interface, a mesma verificação passou (ícone empacotado/centralizado e input preservado acima do teclado). Nenhuma instalação no celular. Probe do endpoint de produção `wss://marvel-lobby-api.onrender.com/v1/community/live` com token inválido retornou 401 durante o upgrade, confirmando transporte WSS pelo Render e proteção de sessão, sem consultar mensagens reais. A verificação autenticada entre participantes foi feita no servidor temporário local. Não há mudança de banco nesta revisão.

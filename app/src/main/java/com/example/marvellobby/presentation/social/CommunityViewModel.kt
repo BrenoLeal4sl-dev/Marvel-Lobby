@@ -173,8 +173,8 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         val forOwner=owner;chat(id) { it.copy(loading=true,error=null) }
         jobs["chat:$id"]=viewModelScope.launch {
             try { val page=app.community.messages(forOwner,id,if(older)old.messages.first().id else null)
-                if(owner==forOwner)chat(id) { it.copy(peer=page.peer,messages=mergeDirectMessages(it.messages,page.items),loading=false,
-                    loaded=true,hasOlder=page.hasMore,peerLastRead=page.peerLastRead,error=null) }
+                if(owner==forOwner)chat(id) { it.receivePage(page,advanceCursor=!older).copy(loading=false,
+                    loaded=true,hasOlder=page.hasMore) }
             } catch(cancelled: CancellationException) { throw cancelled }
             catch(e: Exception) { if(owner==forOwner)chat(id) { it.copy(loading=false,error=error(e)) } }
         }
@@ -186,11 +186,11 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         val forOwner=owner
         jobs["chat:$id"]=viewModelScope.launch {
             try {
-                var after=old.messages.lastOrNull()?.id ?: 0L
+                var after=old.syncedThrough
                 do {
                     val page=app.community.messages(forOwner,id,after=after)
                     if(owner!=forOwner)return@launch
-                    chat(id) { it.copy(peer=page.peer,messages=mergeDirectMessages(it.messages,page.items),peerLastRead=page.peerLastRead,error=null) }
+                    chat(id) { it.receivePage(page) }
                     val next=page.items.lastOrNull()?.id ?: after
                     if(!page.hasMore||next<=after)break
                     after=next;ensureActive()
@@ -209,7 +209,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
             try { val sent=app.community.send(forOwner,id,pending.text,pending.clientId)
                 if(owner==forOwner) {
                     if(drafts[id]?.trim()==pending.text)drafts[id]=""
-                    chat(id) { it.copy(messages=mergeDirectMessages(it.messages,listOf(sent)),sending=false,pending=null,sendError=null) }
+                    chat(id) { it.acknowledge(sent) }
                     loadInbox();syncChat(id)
                 }
             } catch(cancelled: CancellationException) { throw cancelled }
@@ -218,7 +218,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     }
     fun markRead(id: String) {
         if(!online||!foreground||route.screen!="directChat"||route.userId!=id)return
-        val last=state.value.chats[id]?.messages?.lastOrNull()?.id ?: return
+        val last=state.value.chats[id]?.syncedThrough?.takeIf { it>0 } ?: return
         if(last<=(readThrough[id] ?: 0L)||jobs["read:$id"]?.isActive==true)return
         val forOwner=owner
         jobs["read:$id"]=viewModelScope.launch {

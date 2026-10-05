@@ -2,6 +2,7 @@ import {before,after,beforeEach,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import WebSocket from 'ws';
 import {createApp} from '../src/app.js';
 import {TestDatabase} from './database-fixture.js';
 import type {SessionResponse} from '../src/contracts.js';
@@ -124,4 +125,51 @@ test('live events go only to participants and websocket requires an authenticate
   assert.ok(events[1]!.some(e=>e.type==='messages'&&e.conversationId===id));
   assert.ok(!events[2]!.some(e=>e.conversationId===id));
   sockets.forEach(socket=>socket.terminate());
+});
+
+test('real websocket connections deliver message/read signals and recover missed messages after reconnect',async()=> {
+  const origin=await app.listen({port:0,host:'127.0.0.1'});
+  const sockets:WebSocket[]=[];
+  const connect=async(who:SessionResponse)=> {
+    const socket=new WebSocket(origin.replace('http://','ws://')+'/v1/community/live',
+      {headers:{authorization:`Bearer ${who.accessToken}`}});
+    sockets.push(socket);const events:any[]=[];
+    await new Promise<void>((resolve,reject)=> {
+      const timer=setTimeout(()=>reject(new Error('WebSocket ready signal timed out')),3000);
+      socket.once('error',error=>{clearTimeout(timer);reject(error);});
+      socket.on('message',body=> {
+        const event=JSON.parse(body.toString());events.push(event);
+        if(event.type==='ready'){clearTimeout(timer);resolve();}
+      });
+    });
+    return {socket,events};
+  };
+  const waitSignal=async(events:any[],type:string,id:string)=> {
+    const deadline=Date.now()+3000;
+    while(!events.some(event=>event.type===type&&event.conversationId===id)) {
+      assert.ok(Date.now()<deadline,`Missing live ${type} signal`);
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+  };
+  const post=async(path:string,who:SessionResponse,body:unknown)=> {
+    const response=await fetch(origin+path,{method:'POST',headers:{authorization:`Bearer ${who.accessToken}`,'content-type':'application/json'},body:JSON.stringify(body)});
+    assert.ok(response.ok,`HTTP operation failed: ${response.status}`);return response.json() as Promise<any>;
+  };
+  try {
+    const a=await connect(alice),b=await connect(bob),outsider=await connect(eve);
+    const id=await open(alice,bob);
+    const first=await post(`/v1/community/conversations/${id}/messages`,alice,{text:'Live hello',clientId:randomUUID()});
+    await Promise.all([waitSignal(a.events,'messages',id),waitSignal(b.events,'messages',id)]);
+    assert.ok(!outsider.events.some(event=>event.conversationId===id));
+    assert.ok(b.events.every(event=>!('text' in event)));
+    const page=await fetch(`${origin}/v1/community/conversations/${id}/messages`,{headers:{authorization:`Bearer ${bob.accessToken}`}});
+    assert.equal((await page.json() as any).items[0].text,'Live hello');
+    await post(`/v1/community/conversations/${id}/read`,bob,{lastId:first.id});
+    await waitSignal(a.events,'read',id);
+    const closed=new Promise(resolve=>b.socket.once('close',resolve));b.socket.terminate();await closed;
+    const missed=await post(`/v1/community/conversations/${id}/messages`,alice,{text:'While disconnected',clientId:randomUUID()});
+    await connect(bob);
+    const recovered=await fetch(`${origin}/v1/community/conversations/${id}/messages?after=${first.id}`,{headers:{authorization:`Bearer ${bob.accessToken}`}});
+    assert.deepEqual((await recovered.json() as any).items.map((message:any)=>message.id),[missed.id]);
+  } finally { sockets.forEach(socket=>socket.terminate()); }
 });

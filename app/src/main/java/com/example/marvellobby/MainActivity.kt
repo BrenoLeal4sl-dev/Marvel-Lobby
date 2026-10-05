@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private var directStyle=""
     private var directFirst=0L
     private var directLast=0L
+    private var directCount=0
     private var scroll: ScrollView?=null
     private var renderedRoute=""
     private var lastState: AppState?=null
@@ -171,6 +172,7 @@ class MainActivity : AppCompatActivity() {
             retainedDirectRoot=root;directStyle=style
             val messages=community.state.value.chats[state.route.userId]?.messages.orEmpty()
             directFirst=messages.firstOrNull()?.id ?: 0;directLast=messages.lastOrNull()?.id ?: 0
+            directCount=messages.size
         }
         navigationBar?.select(state.route.section ?: "home")
         renderedRoute=state.route.key
@@ -230,7 +232,7 @@ class MainActivity : AppCompatActivity() {
         val oldHeight=if(view.childCount>0)view.getChildAt(0).height else 0
         val wasBottom=oldY+view.height>=oldHeight-48
         val older=directFirst>0 && first<directFirst
-        val newMessage=last!=directLast
+        val newMessage=last!=directLast || messages.size>directCount
         val light=state.preferences.appearance=="light" || (state.preferences.appearance=="system" && resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_NO)
         val ui=UiKit(this,Palette(light)) { Translations.text(it,state.preferences.language) }
         view.removeAllViews();view.addView(ScreenRenderer(this,vm,state,ui).render())
@@ -241,7 +243,7 @@ class MainActivity : AppCompatActivity() {
             isEnabled=chat?.loaded==true && chat.pending==null && !chat.sending
             alpha=if(isEnabled)1f else 0.4f
         }
-        directFirst=first;directLast=last
+        directFirst=first;directLast=last;directCount=messages.size
         view.post {
             if(scroll===view && vm.state.value.route.key==state.route.key) {
                 val height=view.getChildAt(0).height

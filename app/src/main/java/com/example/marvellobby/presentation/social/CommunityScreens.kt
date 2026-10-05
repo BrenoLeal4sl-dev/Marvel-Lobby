@@ -164,7 +164,7 @@ fun ScreenRenderer.directComposer(): View {
         doAfterTextChanged { social.drafts[id]=it.toString() }
     }
     row.addView(field,LinearLayout.LayoutParams(0,-2,1f))
-    row.addView(ui.icon("send","Send") { social.send(id) }.apply {
+    row.addView(ui.actionIcon(com.example.marvellobby.R.drawable.ic_send,"Send",ui.palette.red) { social.send(id) }.apply {
         tag="direct:send";isEnabled=!chat.sending && chat.pending==null && chat.loaded;alpha=if(isEnabled)1f else 0.4f
     },LinearLayout.LayoutParams(ui.dp(48),ui.dp(48)).apply { marginStart=ui.dp(8) })
     return row

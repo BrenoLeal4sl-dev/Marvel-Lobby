@@ -41,6 +41,12 @@ class CommunityUiTest {
             lateinit var original: EditText
             scenario.onActivity { activity ->
                 original=activity.findViewById(0x01000000 or ("direct:$conversation".hashCode() and 0x00FFFFFF))
+                val send=activity.window.decorView.findViewWithTag<android.view.ViewGroup>("direct:send")
+                assertNotNull(send)
+                val icon=send.getChildAt(0) as android.widget.ImageView
+                assertNotNull("The send icon must be a bundled drawable, even while offline",icon.drawable)
+                assertEquals(send.width/2f,icon.left+icon.width/2f,1f)
+                assertEquals(send.height/2f,icon.top+icon.height/2f,1f)
                 original.requestFocus();original.setText("Olá comunidade!")
                 activity.getSystemService(InputMethodManager::class.java).showSoftInput(original,InputMethodManager.SHOW_IMPLICIT)
             }

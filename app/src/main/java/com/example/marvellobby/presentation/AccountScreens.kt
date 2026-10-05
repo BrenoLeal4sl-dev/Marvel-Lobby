@@ -21,7 +21,7 @@ fun ScreenRenderer.profile() {
         label("Member since")
         add(ui.text(java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(user.joinedAt)),14),gap=8)
         menu("Public profile","See what other users can see") { vm.navigate(Route("publicProfile",userId=user.id)) }
-        state.onlineProfileNotice?.let { body(it);button("Try again",false) { vm.refreshOnlineProfile() } }
+        if(!activity.community.state.value.requiresSignIn)state.onlineProfileNotice?.let { body(it);button("Try again",false) { vm.refreshOnlineProfile() } }
     } else if(user.email!="guest" && vm.onlineAvailable) {
         menu("Connect online account","Keep your saved records on this device") { vm.navigate(Route("connectAccount")) }
     }

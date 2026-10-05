@@ -29,6 +29,7 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     private var initialized=false
     private var owner=""
     private val sessionLock=Mutex()
+    private var resumeAfterSignIn: Pair<String,Route>?=null
     val onlineAvailable get()=app.onlineAccounts.available
     val drafts=mutableMapOf<String,String>()
     val scrollPositions=mutableMapOf<String,Int>()
@@ -106,6 +107,15 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     fun onboarding(register: Boolean) {
         viewModelScope.launch { app.preferences.finishOnboarding(); navigate(Route(if(register) "register" else "login"),replace=true) }
     }
+    fun reauthenticate() {
+        if(state.value.authBusy)return
+        val user=state.value.user?.takeIf { it.online } ?: return
+        if(state.value.route.screen!="login")resumeAfterSignIn=user.ownerKey to state.value.route
+        drafts.keys.filter { it.startsWith("auth:") }.toList().forEach(drafts::remove)
+        drafts["auth:email"]=user.email
+        navigate(Route("login"),replace=true)
+        mutable.update { it.copy(formError="Sign in again to continue.") }
+    }
     fun authenticate(register: Boolean,name: String,email: String,password: String,confirmation: String,online: Boolean=false,username: String="") {
         if(state.value.authBusy) return
         mutable.update { it.copy(authBusy=true,formError=null) }
@@ -125,17 +135,21 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
                     }
                 }
                 drafts.keys.filter { it.startsWith("auth") }.toList().forEach { drafts.remove(it) }
-                refreshLibrary(); refreshChats(); tab("home")
+                val destination=resumeAfterSignIn?.takeIf { it.first==profile.ownerKey }?.second ?: Route("home")
+                resumeAfterSignIn=null
+                refreshLibrary(); refreshChats();navigate(destination,replace=true)
             } catch(cancelled: CancellationException) { throw cancelled }
             catch(e: Exception) { mutable.update { it.copy(authBusy=false,formError=error(e)) } }
         }
     }
     fun guest() { if(state.value.authBusy)return;viewModelScope.launch {
+        resumeAfterSignIn=null
         app.preferences.session("guest"); owner="guest"
         mutable.update { it.copy(user=UserProfile("Guest","guest")) }; refreshLibrary(); refreshChats(); tab("home")
     } }
     fun logout() { viewModelScope.launch {
         val previousOwner=owner
+        resumeAfterSignIn=null
         jobs.values.forEach { it.cancel() }; aiJob?.cancel(); suggestionSource=null; drafts.clear(); scrollPositions.clear()
         mutable.update { it.copy(authBusy=true) }
         sessionLock.withLock {

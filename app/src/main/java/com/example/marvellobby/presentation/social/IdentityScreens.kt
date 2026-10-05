@@ -52,6 +52,7 @@ fun ScreenRenderer.connectAccount() {
 }
 
 fun ScreenRenderer.publicProfile() {
+    if(communitySessionRequired())return
     label("PUBLIC PROFILE")
     if(state.publicProfileLoading) { add(ui.loading());return }
     state.publicProfileError?.let { sectionError(it) { vm.loadPublicProfile(state.route.userId.orEmpty()) };return }

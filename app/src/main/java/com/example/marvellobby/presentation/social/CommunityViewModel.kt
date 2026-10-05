@@ -26,11 +26,19 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     val drafts=mutableMapOf<String,String>()
     val userId get()=owner.removePrefix("remote:")
     val online get()=owner.startsWith("remote:")
+    private val canRequest get()=online && !state.value.requiresSignIn
     init { viewModelScope.launch {
-        app.preferences.flow.map { it.session }.distinctUntilChanged().collect { session ->
-            live?.cancel();live=null;jobs.values.forEach { it.cancel() };jobs.clear();drafts.clear();readThrough.clear()
-            owner=session;mutable.value=CommunityState()
-            enter();startLive()
+        combine(app.preferences.flow.map { it.session },app.onlineAccounts.sessionValidity) { session,validity ->
+            session to validity[session]
+        }.distinctUntilChanged().collect { (session,valid) ->
+            val changed=owner!=session
+            val recovering=!changed && state.value.requiresSignIn && valid==true
+            if(changed || valid==false || recovering) {
+                live?.cancel();live=null;jobs.values.forEach { it.cancel() };jobs.clear()
+                if(changed) { drafts.clear();readThrough.clear();owner=session;mutable.value=CommunityState() }
+                mutable.update { it.sessionRequired(valid==false) }
+            }
+            if(changed || recovering) { enter();startLive();if(recovering)loadInbox() }
         }
     } }
     private fun error(e: Exception)=when(e) {
@@ -40,7 +48,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     fun foreground(value: Boolean) { foreground=value;if(value){startLive();enter()}else{live?.cancel();live=null;mutable.update { it.copy(connected=false,connecting=false) }} }
     fun route(value: Route) { if(route==value)return;route=value;enter() }
     private fun enter() {
-        if(!online)return
+        if(!canRequest)return
         when(route.screen) {
             "community","socialPeople" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
             "inbox" -> if(!state.value.inbox.loaded)loadInbox()
@@ -50,11 +58,11 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     private fun startLive() {
-        if(!foreground||!online||live?.isActive==true)return
+        if(!foreground||!canRequest||live?.isActive==true)return
         val forOwner=owner
         live=viewModelScope.launch {
             var wait=2_000L
-            while(isActive && foreground && owner==forOwner) {
+            while(isActive && foreground && owner==forOwner && canRequest) {
                 mutable.update { it.copy(connecting=true) }
                 try {
                     app.community.events(forOwner).collect { event ->
@@ -82,7 +90,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun loadProfile(id: String) {
-        if(!online || jobs["profile:$id"]?.isActive==true)return
+        if(!canRequest || jobs["profile:$id"]?.isActive==true)return
         val forOwner=owner
         mutable.update { it.copy(profileLoading=it.profileLoading+id,profileErrors=it.profileErrors-id) }
         jobs["profile:$id"]=viewModelScope.launch {
@@ -93,7 +101,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     }
     fun follow(id: String) {
         val profile=state.value.profiles[id] ?: return
-        if(id in state.value.followBusy||profile.isSelf)return
+        if(!canRequest || id in state.value.followBusy||profile.isSelf)return
         val forOwner=owner;mutable.update { it.copy(followBusy=it.followBusy+id,notice=null) }
         jobs["follow:$id"]=viewModelScope.launch {
             try { val updated=app.community.follow(forOwner,id,!profile.isFollowing)
@@ -103,6 +111,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun searchPeople(query: String) {
+        if(!canRequest)return
         val key=route.key;val old=state.value.people[key] ?: PeopleState()
         if(old.query==query)return
         jobs["people:$key"]?.cancel()
@@ -110,13 +119,13 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         loadPeople(debounce=true)
     }
     fun refreshPeople() {
-        if(!online || state.value.people[route.key]?.loading==true)return
+        if(!canRequest || state.value.people[route.key]?.loading==true)return
         loadPeople()
         loadInbox()
         loadProfile(userId)
     }
     fun loadPeople(more: Boolean=false,debounce: Boolean=false) {
-        if(!online)return
+        if(!canRequest)return
         val target=route;val key=target.key;val old=state.value.people[key] ?: PeopleState()
         if(more && (old.loading||old.next==null))return
         val forOwner=owner;jobs["people:$key"]?.cancel()
@@ -133,7 +142,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun loadInbox(more: Boolean=false) {
-        if(!online)return
+        if(!canRequest)return
         if(jobs["inbox"]?.isActive==true) {
             if(!more && jobs["inbox-resync"]?.isActive!=true)jobs["inbox-resync"]=viewModelScope.launch {
                 jobs["inbox"]?.join();loadInbox()
@@ -152,7 +161,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun openConversation(id: String) {
-        if(!online||state.value.opening)return
+        if(!canRequest||state.value.opening)return
         val forOwner=owner;mutable.update { it.copy(opening=true,notice=null) }
         jobs["open"]=viewModelScope.launch {
             try { val conversation=app.community.open(forOwner,id)
@@ -168,7 +177,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     }
     private fun chat(id: String,change: (DirectChatState)->DirectChatState) { mutable.update { it.copy(chats=it.chats+(id to change(it.chats[id] ?: DirectChatState()))) } }
     fun loadChat(id: String,older: Boolean=false) {
-        if(!online||jobs["chat:$id"]?.isActive==true)return
+        if(!canRequest||jobs["chat:$id"]?.isActive==true)return
         val old=state.value.chats[id] ?: DirectChatState();if(older&&(!old.hasOlder||old.messages.isEmpty()))return
         val forOwner=owner;chat(id) { it.copy(loading=true,error=null) }
         jobs["chat:$id"]=viewModelScope.launch {
@@ -180,7 +189,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun syncChat(id: String) {
-        if(!online)return
+        if(!canRequest)return
         if(jobs["chat:$id"]?.isActive==true){jobs["resync:$id"]?.cancel();jobs["resync:$id"]=viewModelScope.launch { jobs["chat:$id"]?.join();syncChat(id) };return}
         val old=state.value.chats[id] ?: DirectChatState();if(!old.loaded){loadChat(id);return}
         val forOwner=owner
@@ -200,7 +209,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun send(id: String,retry: Boolean=false) {
-        val old=state.value.chats[id] ?: return;if(old.sending||!online)return
+        val old=state.value.chats[id] ?: return;if(old.sending||!canRequest)return
         val pending=if(retry)old.pending else PendingDirectMessage(drafts[id].orEmpty().trim(),UUID.randomUUID().toString())
         if(pending==null||pending.text.isBlank())return
         if(!retry && old.pending!=null)return // Resolve an ambiguous failed send before creating another nonce.
@@ -217,7 +226,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         }
     }
     fun markRead(id: String) {
-        if(!online||!foreground||route.screen!="directChat"||route.userId!=id)return
+        if(!canRequest||!foreground||route.screen!="directChat"||route.userId!=id)return
         val last=state.value.chats[id]?.syncedThrough?.takeIf { it>0 } ?: return
         if(last<=(readThrough[id] ?: 0L)||jobs["read:$id"]?.isActive==true)return
         val forOwner=owner

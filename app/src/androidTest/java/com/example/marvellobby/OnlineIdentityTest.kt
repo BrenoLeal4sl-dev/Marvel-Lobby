@@ -9,7 +9,7 @@ import com.example.marvellobby.data.local.*
 import com.example.marvellobby.data.remote.*
 import com.example.marvellobby.data.repository.*
 import com.google.gson.Gson
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -24,6 +24,115 @@ class OnlineIdentityTest {
     private fun row(user: UserProfile)=RemoteAccount().apply { owner=user.ownerKey;payload=Gson().toJson(user) }
     private fun seed(dao: ArchiveDao,owner: String) {
         dao.insertAccount(LocalAccount().apply { email=owner;name="Local";username="local_hero";passwordHash="hash";salt="salt";avatar="" })
+    }
+
+    private inner class SessionFixture: AutoCloseable {
+        val db=Room.inMemoryDatabaseBuilder(context,MarvelDatabase::class.java).build()
+        val user=remote()
+        var secret: SessionSecrets?=null
+        var refreshes=0
+        var protectedCalls=0
+        var failRefresh: Exception?=null
+        var failProtected: Exception?=null
+        var rotationStarted: CompletableDeferred<Unit>?=null
+        var releaseRotation: CompletableDeferred<Unit>?=null
+        val store=object:OnlineTokens {
+            override fun read(owner:String)=secret
+            override fun save(owner:String,secrets:SessionSecrets) { secret=secrets }
+            override fun remove(owner:String) { secret=null }
+        }
+        val profile=JSONObject().put("id",user.id).put("name",user.name).put("email",user.email).put("username",user.username)
+            .put("bio",user.bio).put("avatarId",JSONObject.NULL).put("joinedAt","2026-10-01T12:00:00Z")
+        fun session(access: String,refresh: String)=JSONObject().put("user",profile).put("accessToken",access.repeat(43))
+            .put("refreshToken",refresh.repeat(43)).put("accessExpiresAt","2036-10-01T12:00:00Z")
+        val transport=object:LobbyTransport {
+            override val origin="https://example.invalid"
+            override suspend fun request(method:String,path:String,body:JSONObject?,bearer:String?):JSONObject=withContext(Dispatchers.IO) {
+                when(path) {
+                    "/v1/auth/login" -> session("a","r")
+                    "/v1/auth/refresh","/v1/me/credentials" -> {
+                        if(path.endsWith("refresh")) {
+                            refreshes++;failRefresh?.let { throw it }
+                            assertEquals("r".repeat(43),body!!.getString("refreshToken"))
+                        }
+                        rotationStarted?.complete(Unit)
+                        releaseRotation?.await() // Server consumed old token; replacement response is in flight.
+                        session("b","s")
+                    }
+                    else -> {
+                        protectedCalls++;failProtected?.let { throw it }
+                        assertEquals(secret!!.accessToken,bearer)
+                        profile
+                    }
+                }
+            }
+        }
+        val repository=OnlineAccountRepository(db.archive(),transport,store,AvatarRepository(context))
+        suspend fun login() { repository.login(user.email,"Password2026") }
+        override fun close() { db.close() }
+    }
+
+    @Test fun cancelledRefreshStillPersistsRotatedTokensAndDoesNotRunCancelledQuery()=runBlocking<Unit> {
+        SessionFixture().use { fixture ->
+            fixture.login();fixture.secret=fixture.secret!!.copy(accessExpiresAt=0)
+            fixture.rotationStarted=CompletableDeferred();fixture.releaseRotation=CompletableDeferred()
+            val request=launch { fixture.repository.communityRequest(fixture.user.ownerKey,"GET","/v1/community/people") }
+            withTimeout(5000) { fixture.rotationStarted!!.await() }
+            request.cancel();fixture.releaseRotation!!.complete(Unit)
+            withTimeout(5000) { request.join() }
+            assertEquals("s".repeat(43),fixture.secret!!.refreshToken)
+            assertEquals(0,fixture.protectedCalls)
+            fixture.repository.communityRequest(fixture.user.ownerKey,"GET","/v1/community/people")
+            assertEquals(1,fixture.refreshes);assertEquals(1,fixture.protectedCalls)
+        }
+    }
+
+    @Test fun cancelledCredentialChangeStillSavesItsReplacementSession()=runBlocking<Unit> {
+        SessionFixture().use { fixture ->
+            fixture.login();fixture.rotationStarted=CompletableDeferred();fixture.releaseRotation=CompletableDeferred()
+            val request=launch {
+                fixture.repository.update(fixture.user.ownerKey,fixture.user.name,fixture.user.username,fixture.user.bio,"",
+                    fixture.user.email,"Password2026","NewPassword2026")
+            }
+            withTimeout(5000) { fixture.rotationStarted!!.await() }
+            request.cancel();fixture.releaseRotation!!.complete(Unit)
+            withTimeout(5000) { request.join() }
+            assertEquals("s".repeat(43),fixture.secret!!.refreshToken)
+            fixture.repository.me(fixture.user.ownerKey)
+            assertEquals(0,fixture.refreshes);assertEquals(1,fixture.protectedCalls)
+        }
+    }
+
+    @Test fun revokedRefreshRequiresSignInButTransientFailurePreservesTheSession()=runBlocking<Unit> {
+        SessionFixture().use { fixture ->
+            fixture.login();val original=fixture.secret!!
+            fixture.secret=original.copy(accessExpiresAt=0)
+            fixture.failRefresh=java.io.IOException("Temporary connection failure")
+            assertTrue(runCatching { fixture.repository.me(fixture.user.ownerKey) }.isFailure)
+            assertNotNull(fixture.secret);assertEquals(true,fixture.repository.sessionValidity.value[fixture.user.ownerKey])
+            fixture.failRefresh=LobbyApiException("SESSION_EXPIRED",401,"Sign in again to continue.")
+            val failure=runCatching { fixture.repository.me(fixture.user.ownerKey) }.exceptionOrNull() as LobbyApiException
+            assertEquals("SESSION_EXPIRED",failure.code);assertNull(fixture.secret)
+            assertEquals(false,fixture.repository.sessionValidity.value[fixture.user.ownerKey])
+            assertNotNull(fixture.db.archive().remoteAccount(fixture.user.ownerKey))
+            fixture.failRefresh=null;fixture.login()
+            assertEquals(true,fixture.repository.sessionValidity.value[fixture.user.ownerKey])
+            fixture.repository.me(fixture.user.ownerKey)
+            assertEquals(1,fixture.protectedCalls)
+        }
+    }
+
+    @Test fun rejectedReplacementSessionDoesNotEnterAnEndlessRefreshLoop()=runBlocking<Unit> {
+        SessionFixture().use { fixture ->
+            fixture.login()
+            fixture.failProtected=LobbyApiException("SESSION_EXPIRED",401,"Sign in again to continue.")
+            val failure=runCatching { fixture.repository.me(fixture.user.ownerKey) }.exceptionOrNull() as LobbyApiException
+            assertEquals("SESSION_EXPIRED",failure.code)
+            assertEquals(1,fixture.refreshes);assertEquals(2,fixture.protectedCalls)
+            assertNull(fixture.secret);assertEquals(false,fixture.repository.sessionValidity.value[fixture.user.ownerKey])
+            assertTrue(runCatching { fixture.repository.me(fixture.user.ownerKey) }.isFailure)
+            assertEquals(1,fixture.refreshes);assertEquals(2,fixture.protectedCalls)
+        }
     }
 
     @Test fun followUsesJsonPayloadAndUnfollowKeepsItsDeleteContract()=runBlocking<Unit> {

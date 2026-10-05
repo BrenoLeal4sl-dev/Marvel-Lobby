@@ -13,8 +13,16 @@ import java.util.Date
 
 private val ScreenRenderer.social get()=activity.community
 
+fun ScreenRenderer.communitySessionRequired(): Boolean {
+    if(!social.state.value.requiresSignIn)return false
+    title("Sign in again")
+    body("Your online session has ended. Sign in to reconnect with the community. Your saved records and conversations are kept.")
+    add(ui.button("Sign in again") { vm.reauthenticate() }.apply { tag="community:signin" },height=52)
+    return true
+}
+
 private fun ScreenRenderer.onlineCommunity(): Boolean {
-    if(state.user?.online==true)return true
+    if(state.user?.online==true)return !communitySessionRequired()
     title("Your universe has company")
     body("Connect an online account to follow people and exchange messages.")
     if(state.user?.email!="guest")button("Connect online account") { vm.navigate(Route("connectAccount")) }
@@ -74,6 +82,7 @@ private fun ScreenRenderer.personRow(user: UserProfile,subtitle: String=user.bio
 }
 
 fun ScreenRenderer.socialStats(id: String) {
+    if(communitySessionRequired())return
     val data=social.state.value
     val profile=data.profiles[id]
     if(profile!=null) {
@@ -165,7 +174,7 @@ fun ScreenRenderer.directComposer(): View {
     }
     row.addView(field,LinearLayout.LayoutParams(0,-2,1f))
     row.addView(ui.actionIcon(com.example.marvellobby.R.drawable.ic_send,"Send",ui.palette.red) { social.send(id) }.apply {
-        tag="direct:send";isEnabled=!chat.sending && chat.pending==null && chat.loaded;alpha=if(isEnabled)1f else 0.4f
+        tag="direct:send";isEnabled=!social.state.value.requiresSignIn && !chat.sending && chat.pending==null && chat.loaded;alpha=if(isEnabled)1f else 0.4f
     },LinearLayout.LayoutParams(ui.dp(48),ui.dp(48)).apply { marginStart=ui.dp(8) })
     return row
 }

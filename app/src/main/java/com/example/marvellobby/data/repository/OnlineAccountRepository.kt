@@ -4,6 +4,9 @@ import com.example.marvellobby.data.local.*
 import com.example.marvellobby.data.remote.*
 import com.google.gson.Gson
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -14,42 +17,59 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
     private val tokens: OnlineTokens,private val avatars: AvatarRepository) {
     val available get()=api.origin.isNotBlank()
     private val mutex=Mutex()
+    private val validity=MutableStateFlow<Map<String,Boolean>>(emptyMap())
+    val sessionValidity=validity.asStateFlow()
     private val gson=Gson()
     private fun avatar(id: Int?)=avatars.choices.firstOrNull { it.id==id }?.uri.orEmpty()
     private fun avatarId(uri: String)=avatars.choices.firstOrNull { it.uri==uri }?.id
     private fun row(profile: UserProfile)=RemoteAccount().apply { owner=profile.ownerKey;payload=gson.toJson(profile) }
     private fun expired()=LobbyApiException("SESSION_EXPIRED",401,"Sign in again to continue.")
+    private fun invalidate(owner: String): Nothing {
+        tokens.remove(owner)
+        validity.update { it+(owner to false) }
+        throw expired()
+    }
     private suspend fun persist(json: JSONObject,expectedOwner: String?=null): UserProfile {
         val session=LobbyProtocol.session(json,api.origin,::avatar)
         require(expectedOwner==null || session.user.ownerKey==expectedOwner) { "Invalid online session." }
         currentCoroutineContext().ensureActive()
         tokens.save(session.user.ownerKey,session.secrets);dao.saveRemoteAccount(row(session.user))
+        validity.update { it+(session.user.ownerKey to true) }
         return session.user
     }
     suspend fun register(name: String,email: String,password: String,username: String,bio: String="",avatar: String="")=withContext(Dispatchers.IO) {
         mutex.withLock {
             val body=JSONObject().put("name",name).put("email",email).put("password",password).put("username",username)
                 .put("bio",bio).put("avatarId",avatarId(avatar) ?: JSONObject.NULL)
-            persist(api.request("POST","/v1/auth/register",body))
+            withContext(NonCancellable) { persist(api.request("POST","/v1/auth/register",body)) }
         }
     }
     suspend fun login(email: String,password: String)=withContext(Dispatchers.IO) {
-        mutex.withLock { persist(api.request("POST","/v1/auth/login",JSONObject().put("email",email).put("password",password))) }
+        mutex.withLock { withContext(NonCancellable) {
+            persist(api.request("POST","/v1/auth/login",JSONObject().put("email",email).put("password",password)))
+        } }
     }
-    private suspend fun refresh(owner: String,secrets: SessionSecrets): SessionSecrets {
+    private suspend fun refresh(owner: String,secrets: SessionSecrets): SessionSecrets=withContext(NonCancellable) {
+        // Rotation consumes the old refresh token on the server. Finish saving its replacement
+        // even if a search, socket reconnect or screen is cancelled during the request.
+        // Network timeouts still apply; the caller remains cancellable outside this transaction.
         try {
             persist(api.request("POST","/v1/auth/refresh",JSONObject().put("refreshToken",secrets.refreshToken)),owner)
-            return tokens.read(owner) ?: throw expired()
-        } catch(error: LobbyApiException) { if(error.status==401)tokens.remove(owner);throw error }
+            tokens.read(owner) ?: invalidate(owner)
+        } catch(error: LobbyApiException) { if(error.status==401)invalidate(owner);throw error }
     }
     private suspend fun authorized(owner: String,method: String,path: String,body: JSONObject?=null): JSONObject {
-        var secrets=tokens.read(owner) ?: throw expired()
-        if(secrets.origin!=api.origin || owner!="remote:${secrets.userId}")throw expired()
+        var secrets=tokens.read(owner) ?: invalidate(owner)
+        if(secrets.origin!=api.origin || owner!="remote:${secrets.userId}")invalidate(owner)
         if(secrets.accessExpiresAt<=System.currentTimeMillis()+30_000)secrets=refresh(owner,secrets)
+        currentCoroutineContext().ensureActive()
         return try { api.request(method,path,body,secrets.accessToken) }
         catch(error: LobbyApiException) {
             if(error.status!=401)throw error
-            secrets=refresh(owner,secrets);api.request(method,path,body,secrets.accessToken)
+            secrets=refresh(owner,secrets)
+            currentCoroutineContext().ensureActive()
+            try { api.request(method,path,body,secrets.accessToken) }
+            catch(retry: LobbyApiException) { if(retry.status==401)invalidate(owner);throw retry }
         }
     }
     suspend fun me(owner: String)=withContext(Dispatchers.IO) {
@@ -66,7 +86,7 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
             val data=JSONObject().put("name",name).put("username",username).put("bio",bio).put("avatarId",avatarId(avatar) ?: JSONObject.NULL)
             if(email.trim().lowercase(Locale.ROOT)!=previous.email || newPassword.isNotEmpty()) {
                 val body=JSONObject().put("email",email).put("currentPassword",currentPassword).put("newPassword",newPassword).put("profile",data)
-                persist(authorized(owner,"PATCH","/v1/me/credentials",body),owner)
+                withContext(NonCancellable) { persist(authorized(owner,"PATCH","/v1/me/credentials",body),owner) }
             } else {
                 val profile=LobbyProtocol.profile(authorized(owner,"PATCH","/v1/me",data),::avatar)
                 require(profile.ownerKey==owner);currentCoroutineContext().ensureActive();dao.saveRemoteAccount(row(profile));profile

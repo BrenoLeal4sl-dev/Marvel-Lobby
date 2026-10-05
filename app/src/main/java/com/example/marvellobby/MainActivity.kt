@@ -240,7 +240,7 @@ class MainActivity : AppCompatActivity() {
         val draft=community.drafts[id].orEmpty()
         if(field.text.toString()!=draft) { field.setText(draft);field.setSelection(draft.length) }
         root.findViewWithTag<View>("direct:send")?.apply {
-            isEnabled=chat?.loaded==true && chat.pending==null && !chat.sending
+            isEnabled=!community.state.value.requiresSignIn && chat?.loaded==true && chat.pending==null && !chat.sending
             alpha=if(isEnabled)1f else 0.4f
         }
         directFirst=first;directLast=last;directCount=messages.size

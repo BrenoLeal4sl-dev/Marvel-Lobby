@@ -21,6 +21,49 @@ import java.util.UUID
 /** Synthetic local identity has no tokens, so these checks cannot create remote social data. */
 @RunWith(AndroidJUnit4::class)
 class CommunityUiTest {
+    @Test fun expiredSessionOffersOnlineSignInWithoutDeletingTheCachedAccount()=runBlocking<Unit> {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val app=instrumentation.targetContext.applicationContext as MarvelApplication
+        val user=UserProfile("Session test","session@example.invalid",username="session_hero",id=UUID.randomUUID().toString())
+        app.database.archive().saveRemoteAccount(RemoteAccount().apply { owner=user.ownerKey;payload=Gson().toJson(user) })
+        app.preferences.finishOnboarding();app.preferences.session(user.ownerKey);app.preferences.language("pt")
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                var ready=false
+                var startup=""
+                val deadline=android.os.SystemClock.elapsedRealtime()+20000
+                while(!ready && android.os.SystemClock.elapsedRealtime()<deadline) {
+                    Thread.sleep(200)
+                    scenario.onActivity {
+                        val route=ViewModelProvider(it)[MainViewModel::class.java].state.value.route.screen
+                        startup="screen=$route, windowFocus=${it.hasWindowFocus()}, needsSignIn=${it.community.state.value.requiresSignIn}"
+                        ready=it.hasWindowFocus() && route=="home" && it.community.state.value.requiresSignIn
+                    }
+                }
+                assertTrue("A missing session must be recognized without making authenticated requests: $startup",ready)
+                scenario.onActivity { ViewModelProvider(it)[MainViewModel::class.java].navigate(Route("community")) }
+                instrumentation.waitForIdleSync()
+                scenario.onActivity { activity ->
+                    val button=activity.window.decorView.findViewWithTag<android.widget.TextView>("community:signin")
+                    assertNotNull(button);assertEquals("Entrar novamente",button.text.toString())
+                    val vm=ViewModelProvider(activity)[MainViewModel::class.java]
+                    vm.drafts["auth:password"]="Must be cleared";vm.drafts["auth:local"]="true"
+                    assertTrue(button.performClick())
+                    assertEquals("login",vm.state.value.route.screen)
+                    assertEquals(user.ownerKey,vm.state.value.user!!.ownerKey)
+                    assertEquals(user.email,vm.drafts["auth:email"])
+                    assertNull(vm.drafts["auth:password"]);assertNull(vm.drafts["auth:local"])
+                }
+                instrumentation.waitForIdleSync()
+                scenario.onActivity { activity ->
+                    val email=activity.findViewById<EditText>(0x01000000 or ("auth:email".hashCode() and 0x00FFFFFF))
+                    assertEquals(user.email,email.text.toString())
+                }
+                assertNotNull(app.database.archive().remoteAccount(user.ownerKey))
+            }
+        } finally { app.preferences.session("guest") }
+    }
+
     @Test fun directComposerSurvivesStateRefreshAndRemainsAboveKeyboard()=runBlocking<Unit> {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val app=instrumentation.targetContext.applicationContext as MarvelApplication
@@ -30,12 +73,17 @@ class CommunityUiTest {
         app.preferences.finishOnboarding();app.preferences.session(user.ownerKey);app.preferences.language("pt")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             var ready=false
+            var startup=""
             val deadline=android.os.SystemClock.elapsedRealtime()+20000
             while(!ready && android.os.SystemClock.elapsedRealtime()<deadline) {
                 Thread.sleep(200)
-                scenario.onActivity { ready=it.hasWindowFocus() && ViewModelProvider(it)[MainViewModel::class.java].state.value.route.screen=="home" }
+                scenario.onActivity {
+                    val route=ViewModelProvider(it)[MainViewModel::class.java].state.value.route.screen
+                    startup="screen=$route, windowFocus=${it.hasWindowFocus()}"
+                    ready=it.hasWindowFocus() && route=="home"
+                }
             }
-            assertTrue(ready)
+            assertTrue("Android must finish opening the test window: $startup",ready)
             scenario.onActivity { ViewModelProvider(it)[MainViewModel::class.java].navigate(Route("directChat",userId=conversation)) }
             instrumentation.waitForIdleSync();Thread.sleep(500)
             lateinit var original: EditText

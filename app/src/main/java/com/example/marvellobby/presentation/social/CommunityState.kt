@@ -25,4 +25,14 @@ data class CommunityState(val profiles: Map<String,SocialProfile> = emptyMap(),v
     val profileErrors: Map<String,String> = emptyMap(),val followBusy: Set<String> = emptySet(),
     val people: Map<String,PeopleState> = emptyMap(),val inbox: InboxState=InboxState(),
     val chats: Map<String,DirectChatState> = emptyMap(),val connected: Boolean=false,val connecting: Boolean=false,
-    val opening: Boolean=false,val notice: String?=null)
+    val opening: Boolean=false,val notice: String?=null,val requiresSignIn: Boolean=false)
+
+/** Pause online work without discarding messages, pending send nonces, people or drafts. */
+fun CommunityState.sessionRequired(required: Boolean)=copy(
+    requiresSignIn=required,connected=false,connecting=false,opening=false,notice=null,
+    profileLoading=emptySet(),followBusy=emptySet(),profileErrors=if(required)profileErrors else emptyMap(),
+    people=people.mapValues { (_,page)->page.copy(loading=false,error=if(required)page.error else null) },
+    inbox=inbox.copy(loading=false,error=if(required)inbox.error else null),
+    chats=chats.mapValues { (_,chat)->chat.copy(loading=false,sending=false,
+        error=if(required)chat.error else null,sendError=if(required)chat.sendError else
+            if(chat.pending!=null)"The previous send was interrupted. Retry to confirm delivery." else null) })

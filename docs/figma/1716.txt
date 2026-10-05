@@ -1,0 +1,143 @@
+const assetPathPrefix = "https://www.figma.com/api/mcp/asset/1ecf1148-ad6c-43d8-936c-46022a756bff";
+const imgIcon = `${assetPathPrefix}/4edad.svg`;
+const imgIcon1 = `${assetPathPrefix}/6d5a3.svg`;
+const imgIcon2 = `${assetPathPrefix}/95274.svg`;
+const imgIcon3 = `${assetPathPrefix}/4ab00.svg`;
+const imgIcon4 = `${assetPathPrefix}/9e9d9.svg`;
+
+type MeStoryArcCardProps = {
+  className?: string;
+  summary?: string;
+  title?: string;
+};
+
+function MeStoryArcCard({ className, summary = "When heroes choose sides.", title = "CIVIL WAR" }: MeStoryArcCardProps) {
+  return (
+    <div className={className || "[word-break:break-word] bg-[var(--me-color-surface,#222930)] content-stretch flex flex-col gap-[var(--me-space-12,12px)] items-start p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] w-[350px]"} data-node-id="148:1279" data-name="ME / Story Arc Card">
+      <div className="bg-[var(--me-color-paper,#dcdacf)] content-stretch flex flex-col gap-[var(--me-space-8,8px)] items-start overflow-clip py-[24px] relative shrink-0 text-[color:var(--me-color-ink,#17212a)] w-[318px]" data-node-id="148:1280" data-name="Content">
+        <p className="font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] w-[294px]" data-node-id="148:1281">
+          STORY / 001
+        </p>
+        <p className="font-['Montserrat:Bold'] font-bold leading-[30px] relative shrink-0 text-[24px] w-[294px]" data-node-id="148:1282">
+          {title}
+        </p>
+      </div>
+      <p className="font-['Inter:Regular'] font-normal leading-[21px] not-italic relative shrink-0 text-[14px] text-[color:var(--me-color-muted,#afbac2)] w-[318px]" data-node-id="148:1283">
+        {summary}
+      </p>
+    </div>
+  );
+}
+
+type MeIconButtonProps = {
+  className?: string;
+  state?: "Default";
+};
+
+function MeIconButton({ className, state = "Default" }: MeIconButtonProps) {
+  return (
+    <div className={className || "bg-[var(--me-color-surface,#222930)] content-stretch flex gap-[var(--me-space-12,12px)] items-start p-[12px] relative rounded-[var(--me-radius-4,4px)] size-[48px]"} data-node-id="148:1234">
+      <div className="relative shrink-0 size-[24px]" data-node-id="148:1235" data-name="Icon">
+        <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon} />
+      </div>
+    </div>
+  );
+}
+
+export default function Component15StoryArcs() {
+  return (
+    <div className="bg-[var(--me-color-background,#171b20)] relative size-full" data-node-id="148:1716" data-name="15 Story Arcs">
+      <div className="[word-break:break-word] absolute bg-[var(--me-color-background,#171b20)] content-stretch flex font-['Inter:Semi_Bold'] font-semibold gap-[var(--me-space-0,0px)] h-[24px] items-start leading-[16px] left-0 not-italic overflow-clip p-[var(--me-space-0,0px)] text-[12px] top-0 w-[390px]" data-node-id="148:1717" data-name="Android status bar">
+        <p className="relative shrink-0 text-[color:var(--me-color-text,#f1efe8)] w-[300px]" data-node-id="148:1718">
+          9:41
+        </p>
+        <p className="relative shrink-0 text-[color:var(--me-color-muted,#afbac2)] w-[70px]" data-node-id="148:1719">
+          100%
+        </p>
+      </div>
+      <div className="absolute bg-[var(--me-color-background,#171b20)] content-stretch flex gap-[var(--me-space-12,12px)] h-[68px] items-center left-0 overflow-clip p-[var(--me-space-20,20px)] top-[24px] w-[390px]" data-node-id="148:1720" data-name="App bar">
+        <MeIconButton className="bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex gap-[var(--me-space-12,12px)] items-start p-[12px] relative rounded-[var(--me-radius-4,4px)] shrink-0 size-[48px]" />
+        <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[24px] not-italic relative shrink-0 text-[18px] text-[color:var(--me-color-text,#f1efe8)] w-[242px]" data-node-id="148:1722">
+          Story Arcs
+        </p>
+      </div>
+      <div className="absolute h-[668px] left-0 overflow-x-clip overflow-y-auto top-[92px] w-[390px]" data-node-id="148:1723" data-name="Scrollable content">
+        <div className="[word-break:break-word] absolute content-stretch flex flex-col gap-[var(--me-space-20,20px)] items-start left-0 overflow-clip pb-[32px] pt-[8px] px-[var(--me-space-20,20px)] top-0 w-[390px]" data-node-id="148:1724" data-name="Content">
+          <p className="font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-secondary,#a6c4d4)] w-[350px]" data-node-id="148:1725">
+            THE STORY LIBRARY
+          </p>
+          <div className="font-['Montserrat:Bold'] font-bold leading-[0] relative shrink-0 text-[24px] text-[color:var(--me-color-text,#f1efe8)] w-[350px]" data-node-id="148:1726">
+            <p className="leading-[30px] mb-0">Events that redraw</p>
+            <p className="leading-[30px]">the universe.</p>
+          </div>
+          <MeStoryArcCard className="bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex flex-col gap-[var(--me-space-12,12px)] items-start p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0 text-left w-[350px]" />
+          <MeStoryArcCard className="bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex flex-col gap-[var(--me-space-12,12px)] items-start p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0 text-left w-[350px]" summary="A conflict on a cosmic scale." title="INFINITY GAUNTLET" />
+          <MeStoryArcCard className="bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex flex-col gap-[var(--me-space-12,12px)] items-start p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0 text-left w-[350px]" summary="A reality transformed." title="HOUSE OF M" />
+        </div>
+      </div>
+      <div className="absolute bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex h-[60px] items-start left-0 pb-[var(--me-space-16,16px)] pt-[8px] px-[7px] rounded-[var(--me-radius-4,4px)] top-[760px]" data-node-id="148:1730" data-name="ME / Bottom Navigation">
+        <a className="content-stretch flex flex-col gap-[var(--me-space-4,4px)] items-center overflow-clip relative shrink-0 w-[94px]" data-node-id="I148:1730;9:1034" data-name="Home → 05 Home">
+          <div className="relative shrink-0 size-[24px]" data-node-id="I148:1730;9:1035" data-name="Icon">
+            <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon1} />
+          </div>
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-muted,#afbac2)] text-center w-[94px]" data-node-id="I148:1730;9:1037">
+            Home
+          </p>
+        </a>
+        <a className="content-stretch flex flex-col gap-[var(--me-space-4,4px)] items-center overflow-clip relative shrink-0 w-[94px]" data-node-id="I148:1730;9:1038" data-name="Explore → 06 Explore">
+          <div className="relative shrink-0 size-[24px]" data-node-id="I148:1730;9:1039" data-name="Icon">
+            <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon2} />
+          </div>
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-secondary,#a6c4d4)] text-center w-[94px]" data-node-id="I148:1730;9:1041">
+            Explore
+          </p>
+        </a>
+        <a className="content-stretch flex flex-col gap-[var(--me-space-4,4px)] items-center overflow-clip relative shrink-0 w-[94px]" data-node-id="I148:1730;9:1042" data-name="Favorites → 17 Favorites">
+          <div className="relative shrink-0 size-[24px]" data-node-id="I148:1730;9:1043" data-name="Icon">
+            <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon3} />
+          </div>
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-muted,#afbac2)] text-center w-[94px]" data-node-id="I148:1730;9:1045">
+            Favorites
+          </p>
+        </a>
+        <a className="content-stretch flex flex-col gap-[var(--me-space-4,4px)] items-center overflow-clip relative shrink-0 w-[94px]" data-node-id="I148:1730;9:1046" data-name="Marvel AI → 19 Marvel AI">
+          <div className="relative shrink-0 size-[24px]" data-node-id="I148:1730;9:1047" data-name="Icon">
+            <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon4} />
+          </div>
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-muted,#afbac2)] text-center w-[94px]" data-node-id="I148:1730;9:1049">
+            Marvel AI
+          </p>
+        </a>
+      </div>
+      <div className="absolute bg-[var(--me-color-background,#171b20)] content-stretch flex flex-col gap-[var(--me-space-0,0px)] h-[24px] items-center justify-center left-0 overflow-clip p-[var(--me-space-0,0px)] top-[820px] w-[390px]" data-node-id="148:1731" data-name="Android gesture area">
+        <div className="bg-[var(--me-color-muted,#afbac2)] h-[4px] relative shrink-0 w-[108px]" data-node-id="148:1732" data-name="Rectangle" />
+      </div>
+    </div>
+  );
+}
+SUPER CRITICAL: The generated React+Tailwind code MUST be converted to match the target project's technology stack and styling system.
+1. Analyze the target codebase to identify: technology stack, styling approach, component patterns, and design tokens
+2. Convert React syntax to the target framework/library
+3. Transform all Tailwind classes to the target styling system while preserving exact visual design
+4. Follow the project's existing patterns and conventions
+DO NOT install any Tailwind as a dependency unless the user instructs you to do so.
+
+Node ids have been added to the code as data attributes, e.g. `data-node-id="1:2"`.
+These styles are contained in the design: ME / Label: Font(family: "Inter", style: Semi Bold, size: 12, weight: 600, lineHeight: 16, letterSpacing: 0), ME / Subheading: Font(family: "Inter", style: Semi Bold, size: 18, weight: 600, lineHeight: 24, letterSpacing: 0), ME / Heading: Font(family: "Montserrat", style: Bold, size: 24, weight: 700, lineHeight: 30, letterSpacing: 0), ME / Body: Font(family: "Inter", style: Regular, size: 14, weight: 400, lineHeight: 21, letterSpacing: 0).
+Component descriptions: The following components have usage descriptions or documentation links defined in Figma. These descriptions provide important context about the intended usage, best practices, and any constraints for each component. Follow these guidelines when implementing or using these components.
+
+## State=Default
+**Node ID:** 148:1234
+
+Icon Button • Editorial archive system. Minimum interactive target 48 dp.
+
+## ME / Story Arc Card
+**Node ID:** 148:1279
+
+Story Arc Card • Editorial archive system. Minimum interactive target 48 dp.
+
+## ME / Bottom Navigation
+**Node ID:** 148:1293
+
+Bottom Navigation • Editorial archive system. Minimum interactive target 48 dp.
+Images and SVGs will be stored as constants, e.g. const image = `${assetPathPrefix}/<asset file name>`, where assetPathPrefix is declared once at the top of the code and every asset URL interpolates it. These constants will be used in the code as the source for the image, ex: <img src={image} />. Image assets are stored on a remote server for 7 days and can be fetched using the provided URLs until they expire.

@@ -1,0 +1,62 @@
+const assetPathPrefix = "https://www.figma.com/api/mcp/asset/e9340ae7-e386-4bee-a53d-81dd34f6b34c";
+function MeWordmark({ className }: { className?: string }) {
+  return (
+    <div className={className || "content-stretch flex gap-[var(--me-space-12,12px)] h-[60px] items-start py-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)]"} data-node-id="148:1225" data-name="ME / Wordmark">
+      <div className="content-stretch flex flex-col gap-[var(--me-space-4,4px)] items-start overflow-clip relative shrink-0 w-[40px]" data-node-id="148:1226" data-name="Index mark">
+        <div className="bg-[var(--me-color-secondary,#a6c4d4)] h-[4px] relative shrink-0 w-[32px]" data-node-id="148:1227" data-name="Rectangle" />
+        <div className="bg-[var(--me-color-secondary,#a6c4d4)] h-[4px] relative shrink-0 w-[16px]" data-node-id="148:1228" data-name="Rectangle" />
+        <div className="bg-[var(--me-color-secondary,#a6c4d4)] h-[4px] relative shrink-0 w-[32px]" data-node-id="148:1229" data-name="Rectangle" />
+      </div>
+      <div className="[word-break:break-word] content-stretch flex flex-col font-['Inter:Semi_Bold'] font-semibold gap-[var(--me-space-0,0px)] items-start not-italic overflow-clip relative shrink-0 w-[204px]" data-node-id="148:1230" data-name="Content">
+        <p className="leading-[24px] relative shrink-0 text-[18px] text-[color:var(--me-color-text,#f1efe8)] w-[204px]" data-node-id="148:1231">
+          MARVEL
+        </p>
+        <p className="leading-[16px] relative shrink-0 text-[12px] text-[color:var(--me-color-secondary,#a6c4d4)] tracking-[3px] w-[204px]" data-node-id="148:1232">
+          EXPLORER
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function Component01Splash() {
+  return (
+    <div className="bg-[var(--me-color-background,#171b20)] relative size-full" data-node-id="148:1368" data-name="01 Splash">
+      <div className="[word-break:break-word] absolute bg-[var(--me-color-background,#171b20)] content-stretch flex font-['Inter:Semi_Bold'] font-semibold gap-[var(--me-space-0,0px)] h-[24px] items-start leading-[16px] left-0 not-italic overflow-clip p-[var(--me-space-0,0px)] text-[12px] top-0 w-[390px]" data-node-id="148:1369" data-name="Android status bar">
+        <p className="relative shrink-0 text-[color:var(--me-color-text,#f1efe8)] w-[300px]" data-node-id="148:1370">
+          9:41
+        </p>
+        <p className="relative shrink-0 text-[color:var(--me-color-muted,#afbac2)] w-[70px]" data-node-id="148:1371">
+          100%
+        </p>
+      </div>
+      <div className="absolute h-[728px] left-0 overflow-x-clip overflow-y-auto top-[92px] w-[390px]" data-node-id="148:1375" data-name="Scrollable content">
+        <a className="absolute content-stretch cursor-pointer flex flex-col gap-[var(--me-space-20,20px)] items-start left-0 overflow-clip pb-[32px] pt-[230px] px-[var(--me-space-20,20px)] top-0 w-[390px]" data-node-id="148:1376" data-name="Content → 02 Welcome">
+          <MeWordmark className="content-stretch flex gap-[var(--me-space-12,12px)] h-[60px] items-start py-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0" />
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-secondary,#a6c4d4)] text-left w-[350px]" data-node-id="148:1378">
+            THE CONNECTED UNIVERSE
+          </p>
+        </a>
+      </div>
+      <div className="absolute bg-[var(--me-color-background,#171b20)] content-stretch flex flex-col gap-[var(--me-space-0,0px)] h-[24px] items-center justify-center left-0 overflow-clip p-[var(--me-space-0,0px)] top-[820px] w-[390px]" data-node-id="148:1379" data-name="Android gesture area">
+        <div className="bg-[var(--me-color-muted,#afbac2)] h-[4px] relative shrink-0 w-[108px]" data-node-id="148:1380" data-name="Rectangle" />
+      </div>
+    </div>
+  );
+}
+SUPER CRITICAL: The generated React+Tailwind code MUST be converted to match the target project's technology stack and styling system.
+1. Analyze the target codebase to identify: technology stack, styling approach, component patterns, and design tokens
+2. Convert React syntax to the target framework/library
+3. Transform all Tailwind classes to the target styling system while preserving exact visual design
+4. Follow the project's existing patterns and conventions
+DO NOT install any Tailwind as a dependency unless the user instructs you to do so.
+
+Node ids have been added to the code as data attributes, e.g. `data-node-id="1:2"`.
+These styles are contained in the design: ME / Label: Font(family: "Inter", style: Semi Bold, size: 12, weight: 600, lineHeight: 16, letterSpacing: 0), ME / Subheading: Font(family: "Inter", style: Semi Bold, size: 18, weight: 600, lineHeight: 24, letterSpacing: 0).
+Component descriptions: The following components have usage descriptions or documentation links defined in Figma. These descriptions provide important context about the intended usage, best practices, and any constraints for each component. Follow these guidelines when implementing or using these components.
+
+## ME / Wordmark
+**Node ID:** 148:1225
+
+Wordmark • Editorial archive system. Minimum interactive target 48 dp.
+Images and SVGs will be stored as constants, e.g. const image = `${assetPathPrefix}/<asset file name>`, where assetPathPrefix is declared once at the top of the code and every asset URL interpolates it. These constants will be used in the code as the source for the image, ex: <img src={image} />. Image assets are stored on a remote server for 7 days and can be fetched using the provided URLs until they expire.

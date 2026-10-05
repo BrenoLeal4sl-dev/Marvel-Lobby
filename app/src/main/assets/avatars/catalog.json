@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1440,
+    "name": "Wolverine",
+    "file": "1440.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/5/57023/9905332-1000001866.jpg"
+  },
+  {
+    "id": 1443,
+    "name": "Spider-Man",
+    "file": "1443.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/12/124259/8126579-amazing_spider-man_vol_5_54_stormbreakers_variant_textless.jpg"
+  },
+  {
+    "id": 1455,
+    "name": "Iron Man",
+    "file": "1455.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/11174/111743204/9372918-invincibleironman%231vol5kaelngu.jpg"
+  },
+  {
+    "id": 1442,
+    "name": "Captain America",
+    "file": "1442.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/12/124259/8459983-rco031_1650495781.jpg"
+  },
+  {
+    "id": 2268,
+    "name": "Thor",
+    "file": "2268.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/11156/111564182/10173044-immortal_thor_vol_1_1_manapul_variant_textless.jpg"
+  },
+  {
+    "id": 2267,
+    "name": "Hulk",
+    "file": "2267.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/1/15776/9971293-hulk.jpg"
+  },
+  {
+    "id": 1444,
+    "name": "Storm",
+    "file": "1444.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/11174/111743204/9636122-storm7%2Cmateusmanhanini.jpg"
+  },
+  {
+    "id": 3200,
+    "name": "Black Widow",
+    "file": "3200.jpg",
+    "source": "https://comicvine.gamespot.com/a/uploads/scale_medium/11156/111564182/9646599-widow2.jpg"
+  }
+]

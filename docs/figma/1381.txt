@@ -1,0 +1,111 @@
+const assetPathPrefix = "https://www.figma.com/api/mcp/asset/a6daee63-d440-494f-b567-941c0d5c8fa2";
+const imgIcon = `${assetPathPrefix}/4edad.svg`;
+
+type MeButtonProps = {
+  className?: string;
+  label?: string;
+  state?: "Primary" | "Secondary";
+};
+
+function MeButton({ className, label = "Continue", state = "Primary" }: MeButtonProps) {
+  const isSecondary = state === "Secondary";
+  return (
+    <div className={className || `content-stretch flex gap-[var(--me-space-12,12px)] h-[52px] items-center justify-center p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] w-[350px] ${isSecondary ? "bg-[var(--me-color-raised,#2d3740)]" : "bg-[var(--me-color-primary,#b83f42)]"}`} id={isSecondary ? "node-148_1241" : "node-148_1239"}>
+      <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-text,#f1efe8)] text-center w-[310px]" data-node-id="148:1240">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+type MeIconButtonProps = {
+  className?: string;
+  state?: "Default";
+};
+
+function MeIconButton({ className, state = "Default" }: MeIconButtonProps) {
+  return (
+    <div className={className || "bg-[var(--me-color-surface,#222930)] content-stretch flex gap-[var(--me-space-12,12px)] items-start p-[12px] relative rounded-[var(--me-radius-4,4px)] size-[48px]"} data-node-id="148:1234">
+      <div className="relative shrink-0 size-[24px]" data-node-id="148:1235" data-name="Icon">
+        <img alt="" className="absolute block inset-0 max-w-none size-full" src={imgIcon} />
+      </div>
+    </div>
+  );
+}
+
+export default function Component02Welcome() {
+  return (
+    <div className="bg-[var(--me-color-background,#171b20)] relative size-full" data-node-id="148:1381" data-name="02 Welcome">
+      <div className="[word-break:break-word] absolute bg-[var(--me-color-background,#171b20)] content-stretch flex font-['Inter:Semi_Bold'] font-semibold gap-[var(--me-space-0,0px)] h-[24px] items-start leading-[16px] left-0 not-italic overflow-clip p-[var(--me-space-0,0px)] text-[12px] top-0 w-[390px]" data-node-id="148:1382" data-name="Android status bar">
+        <p className="relative shrink-0 text-[color:var(--me-color-text,#f1efe8)] w-[300px]" data-node-id="148:1383">
+          9:41
+        </p>
+        <p className="relative shrink-0 text-[color:var(--me-color-muted,#afbac2)] w-[70px]" data-node-id="148:1384">
+          100%
+        </p>
+      </div>
+      <div className="absolute bg-[var(--me-color-background,#171b20)] content-stretch flex gap-[var(--me-space-12,12px)] h-[68px] items-center left-0 overflow-clip p-[var(--me-space-20,20px)] top-[24px] w-[390px]" data-node-id="148:1385" data-name="App bar">
+        <MeIconButton className="bg-[var(--me-color-surface,#222930)] content-stretch cursor-pointer flex gap-[var(--me-space-12,12px)] items-start p-[12px] relative rounded-[var(--me-radius-4,4px)] shrink-0 size-[48px]" />
+        <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[24px] not-italic relative shrink-0 text-[18px] text-[color:var(--me-color-text,#f1efe8)] w-[242px]" data-node-id="148:1387">
+          Welcome
+        </p>
+      </div>
+      <div className="absolute h-[728px] left-0 overflow-x-clip overflow-y-auto top-[92px] w-[390px]" data-node-id="148:1388" data-name="Scrollable content">
+        <div className="absolute content-stretch flex flex-col gap-[var(--me-space-20,20px)] items-start left-0 overflow-clip pb-[32px] pt-[8px] px-[var(--me-space-20,20px)] top-0 w-[390px]" data-node-id="148:1389" data-name="Content">
+          <div className="[word-break:break-word] bg-[var(--me-color-paper,#dcdacf)] content-stretch flex flex-col gap-[var(--me-space-8,8px)] h-[190px] items-start justify-between overflow-clip p-[var(--me-space-20,20px)] relative shrink-0 text-[color:var(--me-color-ink,#17212a)] w-[350px]" data-node-id="148:1390" data-name="Image reference / A universe of connections">
+            <p className="font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] w-[310px]" data-node-id="148:1391">
+              ARCHIVE / 00
+            </p>
+            <p className="font-['Montserrat:Bold'] font-bold leading-[30px] relative shrink-0 text-[24px] w-[310px]" data-node-id="148:1392">
+              A UNIVERSE OF CONNECTIONS
+            </p>
+            <p className="font-['Inter:Regular'] font-normal leading-[18px] not-italic relative shrink-0 text-[12px] w-[310px]" data-node-id="148:1393">
+              IMAGE PLACEHOLDER · A universe of connections
+            </p>
+          </div>
+          <div className="[word-break:break-word] font-['Montserrat:Bold'] font-bold leading-[0] relative shrink-0 text-[32px] text-[color:var(--me-color-text,#f1efe8)] w-[350px]" data-node-id="148:1394">
+            <p className="leading-[38px] mb-0">Explore the</p>
+            <p className="leading-[38px]">Marvel Universe</p>
+          </div>
+          <p className="[word-break:break-word] font-['Inter:Regular'] font-normal leading-[21px] not-italic relative shrink-0 text-[14px] text-[color:var(--me-color-muted,#afbac2)] w-[350px]" data-node-id="148:1395">
+            Follow the people, powers and stories that connect everything.
+          </p>
+          <p className="[word-break:break-word] font-['Inter:Semi_Bold'] font-semibold leading-[16px] not-italic relative shrink-0 text-[12px] text-[color:var(--me-color-secondary,#a6c4d4)] w-[350px]" data-node-id="148:1396">
+            CHARACTERS / TEAMS / POWERS / STORIES / AI
+          </p>
+          <MeButton className="bg-[var(--me-color-primary,#b83f42)] content-stretch cursor-pointer flex gap-[var(--me-space-12,12px)] h-[52px] items-center justify-center p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0 w-[350px]" label="Get Started" />
+          <MeButton className="bg-[var(--me-color-raised,#2d3740)] content-stretch cursor-pointer flex gap-[var(--me-space-12,12px)] h-[52px] items-center justify-center p-[var(--me-space-16,16px)] relative rounded-[var(--me-radius-4,4px)] shrink-0 w-[350px]" label="I already have an account" state="Secondary" />
+        </div>
+      </div>
+      <div className="absolute bg-[var(--me-color-background,#171b20)] content-stretch flex flex-col gap-[var(--me-space-0,0px)] h-[24px] items-center justify-center left-0 overflow-clip p-[var(--me-space-0,0px)] top-[820px] w-[390px]" data-node-id="148:1399" data-name="Android gesture area">
+        <div className="bg-[var(--me-color-muted,#afbac2)] h-[4px] relative shrink-0 w-[108px]" data-node-id="148:1400" data-name="Rectangle" />
+      </div>
+    </div>
+  );
+}
+SUPER CRITICAL: The generated React+Tailwind code MUST be converted to match the target project's technology stack and styling system.
+1. Analyze the target codebase to identify: technology stack, styling approach, component patterns, and design tokens
+2. Convert React syntax to the target framework/library
+3. Transform all Tailwind classes to the target styling system while preserving exact visual design
+4. Follow the project's existing patterns and conventions
+DO NOT install any Tailwind as a dependency unless the user instructs you to do so.
+
+Node ids have been added to the code as data attributes, e.g. `data-node-id="1:2"`.
+These styles are contained in the design: ME / Label: Font(family: "Inter", style: Semi Bold, size: 12, weight: 600, lineHeight: 16, letterSpacing: 0), ME / Subheading: Font(family: "Inter", style: Semi Bold, size: 18, weight: 600, lineHeight: 24, letterSpacing: 0), ME / Heading: Font(family: "Montserrat", style: Bold, size: 24, weight: 700, lineHeight: 30, letterSpacing: 0), ME / Caption: Font(family: "Inter", style: Regular, size: 12, weight: 400, lineHeight: 18, letterSpacing: 0), ME / Display: Font(family: "Montserrat", style: Bold, size: 32, weight: 700, lineHeight: 38, letterSpacing: 0), ME / Body: Font(family: "Inter", style: Regular, size: 14, weight: 400, lineHeight: 21, letterSpacing: 0).
+Component descriptions: The following components have usage descriptions or documentation links defined in Figma. These descriptions provide important context about the intended usage, best practices, and any constraints for each component. Follow these guidelines when implementing or using these components.
+
+## State=Default
+**Node ID:** 148:1234
+
+Icon Button • Editorial archive system. Minimum interactive target 48 dp.
+
+## State=Primary
+**Node ID:** 148:1239
+
+Button/Primary • Editorial archive system. Minimum interactive target 48 dp.
+
+## State=Secondary
+**Node ID:** 148:1241
+
+Button/Secondary • Editorial archive system. Minimum interactive target 48 dp.
+Images and SVGs will be stored as constants, e.g. const image = `${assetPathPrefix}/<asset file name>`, where assetPathPrefix is declared once at the top of the code and every asset URL interpolates it. These constants will be used in the code as the source for the image, ex: <img src={image} />. Image assets are stored on a remote server for 7 days and can be fetched using the provided URLs until they expire.

@@ -1,0 +1,30 @@
+# No credentials or CA contents belong in this file.
+# After creating the service, add ca.pem under Environment > Secret Files.
+services:
+  - type: web
+    name: marvel-lobby-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PGHOST
+        sync: false
+      - key: PGPORT
+        value: "11716"
+      - key: PGDATABASE
+        value: marvel_mobile
+      - key: PGUSER
+        value: marvel_lobby_api
+      - key: PGPASSWORD
+        sync: false
+      - key: PGSSLMODE
+        value: verify-full
+      - key: PGSSLROOTCERT
+        value: /etc/secrets/ca.pem

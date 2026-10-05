@@ -1,0 +1,22 @@
+package com.example.marvellobby.data.local
+
+import android.content.Context
+import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.map
+
+private val Context.store by preferencesDataStore("marvel_preferences")
+data class AppPreferences(val onboarded: Boolean=false, val session: String="", val appearance: String="dark", val language: String="en")
+class PreferencesStore(private val context: Context) {
+    private val onboarding = booleanPreferencesKey("onboarded")
+    private val session = stringPreferencesKey("session")
+    private val appearance = stringPreferencesKey("appearance")
+    private val language = stringPreferencesKey("language")
+    val flow = context.store.data.map {
+        AppPreferences(it[onboarding] ?: false, it[session] ?: "", it[appearance] ?: "dark", it[language] ?: "en")
+    }
+    suspend fun finishOnboarding() { context.store.edit { it[onboarding] = true } }
+    suspend fun session(email: String) { context.store.edit { it[session] = email; it[onboarding] = true } }
+    suspend fun appearance(value: String) { require(value in listOf("dark","light","system")); context.store.edit { it[appearance] = value } }
+    suspend fun language(value: String) { require(value in listOf("en","pt")); context.store.edit { it[language] = value } }
+}

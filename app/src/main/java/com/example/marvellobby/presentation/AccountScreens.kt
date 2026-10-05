@@ -14,7 +14,7 @@ fun ScreenRenderer.profile() {
         gravity=Gravity.CENTER;tag="profile:username"
     },gap=8) else body("Continue as guest")
     if(user.online) {
-        if(user.bio.isNotBlank())body(user.bio)
+        if(user.bio.isNotBlank())add(ui.text(user.bio,14,ui.palette.muted).apply { text=user.bio })
         user.id?.let { socialStats(it) }
         menu("Community","People · Followers · Messages") { vm.navigate(Route("community")) }
         menu("Messages") { vm.navigate(Route("inbox")) }

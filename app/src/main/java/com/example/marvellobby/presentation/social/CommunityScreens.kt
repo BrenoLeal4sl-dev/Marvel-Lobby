@@ -59,10 +59,10 @@ private fun ScreenRenderer.personRow(user: UserProfile,subtitle: String=user.bio
     val row=ui.row().apply { setPadding(ui.dp(14),ui.dp(16),ui.dp(14),ui.dp(16)) }
     row.addView(ui.avatar(user.avatar,user.name,56),LinearLayout.LayoutParams(ui.dp(56),ui.dp(56)))
     val words=ui.column()
-    ui.add(words,ui.text(user.name,16,bold=true),0)
+    ui.add(words,ui.text(user.name,16,bold=true).apply { text=user.name },0)
     ui.add(words,ui.text("@${user.username}",12,ui.palette.secondary),5)
     if(subtitle.isNotBlank())ui.add(words,ui.text(subtitle,13,ui.palette.muted).apply {
-        maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END
+        text=subtitle;maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END
     },8)
     row.addView(words,LinearLayout.LayoutParams(0,-2,1f).apply { marginStart=ui.dp(14);marginEnd=ui.dp(8) })
     row.addView(ui.icon("chevron","Public profile"))
@@ -134,6 +134,7 @@ fun ScreenRenderer.directChat() {
             background=if(mine)ui.gradient(ui.palette.red,android.graphics.Color.parseColor("#A91529"),22) else ui.shape(ui.palette.surface,border=true)
         }
         val text=ui.text(message.text,14,if(mine)android.graphics.Color.WHITE else ui.palette.text)
+        text.text=message.text // User content is never translated by the interface dictionary.
         text.setTextIsSelectable(true)
         ui.add(bubble,text,0)
         val time=DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.sentAt))

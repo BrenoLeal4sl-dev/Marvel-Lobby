@@ -16,6 +16,7 @@ export class TestDatabase implements Database {
     await engine.exec(readFileSync(fileURLToPath(new URL('000_setup_phase1.sql',root)),'utf8'));
     await engine.exec(readFileSync(fileURLToPath(new URL('002_runtime_permissions.sql',root)),'utf8'));
     await engine.exec(readFileSync(fileURLToPath(new URL('004_community.sql',root)),'utf8'));
+    await engine.exec(readFileSync(fileURLToPath(new URL('005_public_favorites.sql',root)),'utf8'));
     await engine.exec('RESET ROLE');
     return new TestDatabase(engine);
   }

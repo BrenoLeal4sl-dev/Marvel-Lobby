@@ -209,7 +209,7 @@ class OnlineIdentityTest {
             old.execSQL("INSERT INTO conversations VALUES ('saved-chat','old@example.invalid','Hello','{}',20)")
             old.version=3
         }
-        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_3_4).build()
+        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_3_4,MarvelDatabase.MIGRATION_4_5).build()
         try {
             val dao=db.archive()
             assertEquals("old_hero",dao.account("old@example.invalid").username)

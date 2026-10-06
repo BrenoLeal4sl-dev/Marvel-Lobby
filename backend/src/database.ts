@@ -44,4 +44,8 @@ export async function checkDatabase(db: Database): Promise<void> {
     await db.query('SELECT id,body FROM marvel_lobby.direct_messages LIMIT 0');
     await db.query('SELECT last_read_id FROM marvel_lobby.direct_reads LIMIT 0');
   }
+  if(versions.some(row=>row.version===4)) {
+    await db.query('SELECT user_id,resource_type,comic_vine_id FROM marvel_lobby.public_favorites LIMIT 0');
+    await db.query('SELECT user_id FROM marvel_lobby.favorite_sharing_profiles LIMIT 0');
+  }
 }

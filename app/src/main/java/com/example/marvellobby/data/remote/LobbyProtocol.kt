@@ -38,6 +38,7 @@ object LobbyProtocol {
             "USER_NOT_FOUND" -> "This profile is unavailable."
             "RATE_LIMITED" -> "Too many attempts. Please try again later."
             "COMMUNITY_NOT_READY" -> "Community is being updated. Please try again shortly."
+            "FAVORITES_NOT_READY" -> "Public favorites are being updated. Please try again shortly."
             "CONVERSATION_NOT_FOUND" -> "This conversation is unavailable."
             "MESSAGE_CONFLICT" -> "This message could not be resent. Check the conversation before sending it again."
             else -> "The online service is unavailable. Please try again."

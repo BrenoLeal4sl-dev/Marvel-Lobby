@@ -5,6 +5,7 @@ import android.widget.LinearLayout
 import com.example.marvellobby.BuildConfig
 import com.example.marvellobby.presentation.social.bioField
 import com.example.marvellobby.presentation.social.socialStats
+import com.example.marvellobby.presentation.social.favoriteSharing
 
 fun ScreenRenderer.profile() {
     val user=state.user ?: return
@@ -13,8 +14,10 @@ fun ScreenRenderer.profile() {
     if(user.email!="guest")add(ui.text("@${user.username}",14,ui.palette.secondary).apply {
         gravity=Gravity.CENTER;tag="profile:username"
     },gap=8) else body("Continue as guest")
+    if(user.bio.isNotBlank())add(ui.text(user.bio,14,ui.palette.muted).apply { text=user.bio })
+    if(user.email!="guest")menu(if(user.bio.isBlank())"Add bio" else "Edit bio","Tell people a little about yourself") { vm.navigate(Route("editBio")) }
     if(user.online) {
-        if(user.bio.isNotBlank())add(ui.text(user.bio,14,ui.palette.muted).apply { text=user.bio })
+        favoriteSharing()
         user.id?.let { socialStats(it) }
         menu("Community","People · Followers · Messages") { vm.navigate(Route("community")) }
         menu("Messages") { vm.navigate(Route("inbox")) }
@@ -52,7 +55,7 @@ fun ScreenRenderer.editProfile() {
         inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         filters=arrayOf(android.text.InputFilter.LengthFilter(25))
     }
-    if(user.online)bioField("profile:bio",user.bio)
+    bioField("profile:bio",user.bio)
     label("Account security")
     body("Your stored password cannot be displayed. Enter your current password to change your email or set a new password.")
     if(!state.securityUnlocked)button("Unlock account details",false) { activity.authorizeSensitive { vm.unlockSecurity() } }
@@ -109,7 +112,7 @@ fun ScreenRenderer.about() {
     body("Typography: Plus Jakarta Sans · SIL Open Font License.")
     body("Independent educational project. Marvel characters and related material belong to their respective rights holders. This app is not affiliated with Marvel.")
     if(!vm.onlineAvailable)body("Accounts, favorites and history are saved locally on this device.")
-    if(vm.onlineAvailable)body("Online accounts are managed by the Marvel Lobby server. Favorites, history and AI conversations remain on this device.")
+    if(vm.onlineAvailable)body("Only favorites you choose to share appear on your public profile. The server receives their catalog name, image, type and ID. Your history and AI conversations remain on this device.")
     menu("Privacy & terms") { vm.navigate(Route("privacy")) }
 }
 
@@ -119,8 +122,9 @@ fun ScreenRenderer.privacy() {
     body("Your local account, password hash, profile, favorites and history are stored in this app’s private storage. Passwords are never sent to Comic Vine, Gemini or Groq. Clearing app data removes local accounts and saved records.")
     if(vm.onlineAvailable) {
         label("ONLINE ACCOUNT")
-        body("When you choose an online account, your name, username, biography, approved avatar and email are sent to the Marvel Lobby server over HTTPS. The server stores a password hash. Your public profile includes your name, username, biography, avatar and join date, without your email or password. Connecting a local account keeps its favorites, history and AI conversations on this device; they are not uploaded.")
+        body("When you choose an online account, your name, username, biography, approved avatar and email are sent to the Marvel Lobby server over HTTPS. The server stores a password hash. Your public profile includes your name, username, biography, avatar and join date, without your email or password. Connecting a local account keeps its saved library on this device.")
     }
+    body("Only favorites you choose to share appear on your public profile. The server receives their catalog name, image, type and ID. Your history and AI conversations remain on this device.")
     label("Community")
     body("Following connections and direct messages are stored on the Marvel Lobby server. Only the two participants can access a direct conversation through the app. AI chats remain separate and local.")
     label("COMIC VINE")

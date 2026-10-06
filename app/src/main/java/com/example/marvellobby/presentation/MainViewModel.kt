@@ -97,6 +97,7 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     fun back(): Boolean {
         if(state.value.route.screen=="splash") return true
         when(state.value.route.screen) {
+            "editBio" -> drafts.remove("bio:text")
             "editProfile","connectAccount" -> { drafts.keys.filter { it.startsWith("profile:") || it.startsWith("connect:") }.toList().forEach(drafts::remove) }
             "filters" -> { drafts.remove("filter:marvel"); drafts.remove("filter:power") }
         }
@@ -180,6 +181,22 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
             catch(e: Exception) { mutable.update { it.copy(authBusy=false,formError=error(e)) } }
         }
     }
+    fun saveBio(value: String) {
+        if(state.value.authBusy)return
+        val current=state.value.user?.takeUnless { it.email=="guest" } ?: return
+        val forOwner=current.ownerKey
+        mutable.update { it.copy(authBusy=true,formError=null) }
+        jobs["bio"]=viewModelScope.launch {
+            try {
+                val profile=if(current.online)app.onlineAccounts.bio(forOwner,value) else app.accounts.bio(forOwner,value)
+                if(owner!=forOwner)return@launch
+                mutable.update { it.copy(user=profile,authBusy=false) };drafts.remove("bio:text")
+                if(state.value.route.screen=="editBio")back()
+                messages.send("Biography saved")
+            } catch(cancelled: CancellationException) { throw cancelled }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(authBusy=false,formError=error(e)) } }
+        }
+    }
     fun appearance(value: String) { viewModelScope.launch { app.preferences.appearance(value) } }
     fun language(value: String) { viewModelScope.launch {
         app.preferences.language(value)
@@ -221,7 +238,7 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
                 val previous=state.value.user ?: error("Account unavailable.")
                 require(newPassword.isEmpty() || newPassword==confirm) { "Passwords do not match." }
                 val updated=if(previous.online)app.onlineAccounts.update(forOwner,name,username ?: previous.username,bio,previous.avatar,email,currentPassword,newPassword)
-                    else app.accounts.updateDetails(forOwner,name,email,currentPassword,newPassword,confirm,username)
+                    else app.accounts.updateDetails(forOwner,name,email,currentPassword,newPassword,confirm,username,bio)
                 if(owner!=forOwner)return@launch
                 owner=updated.ownerKey
                 activeOwner=updated.ownerKey

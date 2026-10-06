@@ -1,5 +1,13 @@
 # Banco do Marvel Lobby — Aiven + pgAdmin
 
+## Favoritos públicos — atualização atual
+
+Com a comunidade instalada (versão 3), execute inteiro `005_public_favorites.sql` no Query Tool do banco **marvel_mobile**, como administrador. A migração instala a versão **4**, preserva contas e mensagens e concede as permissões ao usuário `marvel_lobby_api`.
+
+Ela cria uma projeção mínima dos favoritos compartilhados (`public_favorites`) e a view de visibilidade (`favorite_sharing_profiles`). A preferência existente `show_favorites` permanece desativada por padrão. Cada pessoa pode ativar ou ocultar no Profile. O Android publica apenas nome, imagem, tipo e ID do catálogo, sem histórico, e-mail, descrições completas ou chats. RLS limita a escrita ao dono e a leitura de outras contas aos perfis que optaram por compartilhar. Não é sincronização completa da biblioteca entre aparelhos.
+
+O app usa Room versão 5 para guardar a bio local e a fila de alterações de favoritos, preservando os dados da versão anterior.
+
 Esta pasta prepara o PostgreSQL do backend. Não conecta o Android ao banco e não migra automaticamente as contas locais existentes. O app continua funcionando com Room até a integração da Fase 1. As tabelas `conversations` e `messages` guardam Marvel AI; mensagens entre amigos terão tabelas próprias em uma fase seguinte.
 
 ## Banco novo: arquivo único para copiar no pgAdmin

@@ -1,6 +1,17 @@
 # Marvel Lobby — implementação e validação
 
-Atualizado em 01/10/2026.
+Atualizado em 06/10/2026.
+
+## Bio e favoritos nos perfis da comunidade — 06/10/2026
+
+- Profile oferece Adicionar bio / Editar bio, com contador e limite de 280 caracteres Unicode. Salvar retorna ao perfil e permite apagar a bio. A atualização online altera somente o texto; preserva username, nome, avatar e credenciais. Bio local permanece após reabrir o app e mudar o e-mail.
+- Perfis públicos mostram um carrossel de favoritos com filtros Personagens, Poderes, Equipes e Arcos, paginação, estados privado/vazio/carregamento/erro, atualização manual e navegação para o registro real da Comic Vine. Scroll e filtro são preservados. Se a resposta informa perfil privado, também são descartados os favoritos das demais categorias em cache.
+- Compartilhamento é uma escolha por conta: começa privado, pode ser ativado ou ocultado diretamente no Profile. Apenas tipo, ID, nome e imagem do catálogo são publicados. Histórico, descrições completas e conversas de IA continuam locais.
+- Room atualizado de versão 4 para 5, sem reset. A fila de publicação e remoção é durável, isolada por dono e com confirmação por nonce: uma resposta antiga não apaga uma alteração mais recente. Ativar envia os favoritos existentes antes de liberar a visibilidade; ocultar altera a privacidade antes de enviar dados. Falhas preservam os favoritos locais e permitem retomar a sincronização.
+- PostgreSQL atualizado pela migração `005_public_favorites.sql` (versão 4), executada pelo usuário em `marvel_mobile`. Conferência real de leitura na Aiven passou com TLS, usuário restrito e permissões para tabela/view novas. RLS limita escrita ao dono e leitura de outras contas aos perfis que optaram por compartilhar.
+- Backend: 28 testes passaram em PostgreSQL temporário, incluindo publicação privada/pública, isolamento entre contas, filtros/páginas, remoção, repetição de uploads, sanitização de imagem, migração idempotente e atualização exclusiva da bio. Nenhum perfil ou favorito fictício foi gravado na Aiven para validar a funcionalidade.
+- Android: 9 testes nativos passaram no emulador local, cobrindo fila/reabertura, confirmação antiga, falha e retomada de upload, ocultação antes de upload, migração 4→5, persistência de conta/chats e edição da bio diretamente pelo perfil com emojis. O celular físico não recebeu instalação pelos testes.
+- Compilação Android passou; 74 testes unitários passaram, incluindo validação das projeções públicas e descarte das categorias em cache quando um perfil oculta seus favoritos.
 
 ## Revisão de informações e navegação — etapa mais recente
 

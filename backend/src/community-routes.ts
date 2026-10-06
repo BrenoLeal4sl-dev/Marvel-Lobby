@@ -5,6 +5,7 @@ import type { Accounts } from './accounts.js';
 import type { Principal } from './contracts.js';
 import { Community,type CommunityEvent,type PageInput } from './community.js';
 import { unauthorized,ApiError } from './errors.js';
+import {PublicFavorites,FAVORITE_TYPES,type FavoriteInput} from './public-favorites.js';
 
 export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   await app.register(websocket,{options:{maxPayload:256}});
@@ -15,6 +16,7 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
     }
   };
   const social=new Community(accounts,notify);
+  const favorites=new PublicFavorites(accounts);
   const auth=async(request:FastifyRequest)=> {
     const value=request.headers.authorization;if(!value?.startsWith('Bearer '))unauthorized();
     return accounts.authenticate(value.slice(7));
@@ -23,6 +25,18 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   const params={type:'object',properties:{id:uuid},required:['id'],additionalProperties:false};
   const page={type:'object',properties:{query:{type:'string',maxLength:81},after:{type:'string',maxLength:24},
     before:{type:'string',maxLength:19},limit:{type:'string',pattern:'^[0-9]{1,2}$'},offset:{type:'string',pattern:'^[0-9]{1,6}$'}},additionalProperties:false};
+  app.get('/v1/community/me/favorite-sharing',async request=>favorites.status(await auth(request)));
+  app.put<{Body:{enabled:boolean}}>('/v1/community/me/favorite-sharing',
+    {schema:{body:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false}}},
+    async request=>favorites.share(await auth(request),request.body.enabled));
+  app.post<{Body:{items:FavoriteInput[]}}>('/v1/community/me/favorites',{bodyLimit:60000,schema:{body:{type:'object',properties:{items:{type:'array',minItems:1,maxItems:20,items:{type:'object',
+    properties:{type:{type:'string',enum:FAVORITE_TYPES},id:{type:'integer',minimum:1,maximum:2147483647},name:{type:'string',minLength:1,maxLength:400},
+      imageUrl:{type:['string','null'],maxLength:2048},favorite:{type:'boolean'}},required:['type','id','name','imageUrl','favorite'],additionalProperties:false}}},
+    required:['items'],additionalProperties:false}}},async request=>favorites.save(await auth(request),request.body.items));
+  app.get<{Params:{id:string};Querystring:{type:string;offset?:string;limit?:string}}>('/v1/community/users/:id/favorites',
+    {schema:{params,querystring:{type:'object',properties:{type:{type:'string',enum:FAVORITE_TYPES},offset:{type:'string',pattern:'^[0-9]{1,6}$'},
+      limit:{type:'string',pattern:'^[0-9]{1,2}$'}},required:['type'],additionalProperties:false}}},
+    async request=>favorites.list(await auth(request),request.params.id.toLowerCase(),request.query.type,Number(request.query.offset??0),Number(request.query.limit??12)));
   app.get<{Querystring:PageInput}>('/v1/community/people',{schema:{querystring:page}},async request=>social.people(await auth(request),request.query));
   app.get<{Params:{id:string}}>('/v1/community/users/:id',{schema:{params}},async request=>social.publicProfile(await auth(request),request.params.id.toLowerCase()));
   for(const direction of ['followers','following'] as const)app.get<{Params:{id:string};Querystring:PageInput}>(`/v1/community/users/:id/${direction}`,

@@ -135,6 +135,13 @@ export class Accounts {
       return this.account(query,principal.userId);
     });
   }
+  async bio(principal:Principal,value:string):Promise<AccountProfile> {
+    const bio=value.trim();if(Array.from(bio).length>280)invalid('Keep your bio within 280 characters.');
+    return this.authorized(principal,async query=> {
+      await query.query('UPDATE marvel_lobby.profiles SET bio=$2 WHERE user_id=$1',[principal.userId,bio]);
+      return this.account(query,principal.userId);
+    });
+  }
   async credentials(principal: Principal,input: CredentialInput): Promise<SessionResponse> {
     const email=normalizeEmail(input.email);
     const data=input.profile?validateProfile(input.profile):null;

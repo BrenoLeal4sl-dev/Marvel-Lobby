@@ -13,5 +13,6 @@ public class LocalAccount {
  @NonNull public String salt="";
  @NonNull public String avatar="";
  @NonNull @ColumnInfo(defaultValue="''") public String username=Usernames.create("Hero");
+ @NonNull @ColumnInfo(defaultValue="''") public String bio="";
  public LocalAccount() {}
 }

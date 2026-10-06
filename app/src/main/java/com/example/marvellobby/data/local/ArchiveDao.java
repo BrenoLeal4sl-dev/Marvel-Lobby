@@ -12,6 +12,22 @@ import java.util.List;
   record.payload=payload;
   if(toggle)record.favorite=!record.favorite;else record.viewedAt=viewedAt;
   save(record);
+  if(toggle && target.startsWith("remote:"))queuePublicFavorite(record);
+ }
+ @Insert(onConflict=OnConflictStrategy.REPLACE) void queuePublicChange(PublicFavoriteChange change);
+ @Query("SELECT * FROM public_favorite_changes WHERE owner=:owner AND recordKey='@sharing' LIMIT 1") PublicFavoriteChange sharingChange(String owner);
+ @Query("SELECT * FROM public_favorite_changes WHERE owner=:owner AND recordKey<>'@sharing' ORDER BY recordKey LIMIT 20") List<PublicFavoriteChange> publicChanges(String owner);
+ @Query("DELETE FROM public_favorite_changes WHERE owner=:owner AND recordKey=:key AND nonce=:nonce") void acknowledgePublicChange(String owner,String key,String nonce);
+ default void queuePublicFavorite(StoredRecord record) {
+  if(!record.recordKey.matches("(CHARACTER|POWER|TEAM|STORY_ARC):[1-9][0-9]*"))return;
+  PublicFavoriteChange change=new PublicFavoriteChange();change.owner=record.owner;change.recordKey=record.recordKey;
+  change.payload=record.payload;change.favorite=record.favorite;change.nonce=java.util.UUID.randomUUID().toString();queuePublicChange(change);
+ }
+ @Transaction default void queueFavoriteSharing(String owner,boolean enabled) {
+  if(!owner.startsWith("remote:"))throw new IllegalArgumentException("Connect an online account first.");
+  if(enabled)for(StoredRecord record:records(owner))if(record.favorite)queuePublicFavorite(record);
+  PublicFavoriteChange choice=new PublicFavoriteChange();choice.owner=owner;choice.recordKey="@sharing";
+  choice.favorite=enabled;choice.nonce=java.util.UUID.randomUUID().toString();queuePublicChange(choice);
  }
  @Query("DELETE FROM records WHERE owner = :owner AND favorite = 0") void deleteHistory(String owner);
  @Query("UPDATE records SET viewedAt = 0 WHERE owner = :owner") void resetHistory(String owner);
@@ -33,6 +49,7 @@ import java.util.List;
   }
   saveRemoteAccount(target);
   mergeLibrary(source,target.owner);removeOwnerRecords(source);moveConversations(source,target.owner);
+  for(StoredRecord record:records(target.owner))if(record.favorite)queuePublicFavorite(record);
   AccountBinding binding=new AccountBinding();binding.localOwner=source;binding.remoteOwner=target.owner;insertBinding(binding);
  }
  @Insert(onConflict=OnConflictStrategy.ABORT) void insertAccount(LocalAccount account);
@@ -40,10 +57,10 @@ import java.util.List;
  @Query("DELETE FROM accounts WHERE email = :email") void deleteAccount(String email);
  @Query("UPDATE records SET owner = :newOwner WHERE owner = :oldOwner") void moveRecords(String oldOwner,String newOwner);
  @Query("UPDATE conversations SET owner = :newOwner WHERE owner = :oldOwner") void moveConversations(String oldOwner,String newOwner);
- @Query("UPDATE accounts SET email=:newEmail,name=:name,passwordHash=:hash,salt=:salt,avatar=:avatar,username=:username WHERE email=:oldEmail")
- void renameAccount(String oldEmail,String newEmail,String name,String hash,String salt,String avatar,String username);
+ @Query("UPDATE accounts SET email=:newEmail,name=:name,passwordHash=:hash,salt=:salt,avatar=:avatar,username=:username,bio=:bio WHERE email=:oldEmail")
+ void renameAccount(String oldEmail,String newEmail,String name,String hash,String salt,String avatar,String username,String bio);
  @Transaction default void changeAccountEmail(String oldEmail,LocalAccount replacement) {
-  renameAccount(oldEmail,replacement.email,replacement.name,replacement.passwordHash,replacement.salt,replacement.avatar,replacement.username);
+  renameAccount(oldEmail,replacement.email,replacement.name,replacement.passwordHash,replacement.salt,replacement.avatar,replacement.username,replacement.bio);
   moveRecords(oldEmail,replacement.email);
   moveConversations(oldEmail,replacement.email);
  }

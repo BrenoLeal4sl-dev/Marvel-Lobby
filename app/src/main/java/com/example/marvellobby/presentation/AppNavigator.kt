@@ -39,13 +39,13 @@ class AppNavigator {
         "detail" -> type != null && id > 0
         "catalog" -> type != null
         "home", "explore", "search", "filters", "favorites", "ai", "chats", "profile",
-        "editProfile", "settings", "preferences", "about", "privacy", "history" -> true
+        "editProfile", "editBio", "settings", "preferences", "about", "privacy", "history" -> true
         else -> false
     }
 
     private fun normalize(destination: Route): Route {
         val section = when(destination.screen) {
-            "home", "profile", "editProfile", "settings", "preferences", "about", "privacy", "history", "connectAccount", "publicProfile", "community", "socialPeople", "inbox", "directChat" -> "home"
+            "home", "profile", "editProfile", "editBio", "settings", "preferences", "about", "privacy", "history", "connectAccount", "publicProfile", "community", "socialPeople", "inbox", "directChat" -> "home"
             "explore", "catalog", "search", "filters" -> "explore"
             "favorites" -> "favorites"
             "ai", "chats" -> "ai"

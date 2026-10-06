@@ -7,6 +7,20 @@ data class PeopleState(val items: List<UserProfile> = emptyList(),val query: Str
     val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null)
 data class InboxState(val items: List<DirectConversation> = emptyList(),val next: Int?=null,
     val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null,val unreadTotal: Int=0)
+data class PublicFavoritesState(val items: List<PublicFavorite> = emptyList(),val next: Int?=null,val visible: Boolean=false,
+    val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null)
+data class FavoriteSharingState(val enabled: Boolean?=null,val busy: Boolean=false,val error: String?=null)
+
+/** Visibility applies to the whole profile, including previously cached categories. */
+fun CommunityState.receiveFavorites(userId: String,type: ResourceType,page: PublicFavoritesPage,more: Boolean): CommunityState {
+    val key="$userId:${type.name}"
+    val pages=if(page.visible)publicFavorites else publicFavorites.mapValues { (existing,value) ->
+        if(existing.startsWith("$userId:"))PublicFavoritesState(loaded=true) else value
+    }
+    val prior=if(more && page.visible)pages[key]?.items.orEmpty() else emptyList()
+    return copy(publicFavorites=pages+(key to PublicFavoritesState(
+        items=(prior+page.items).distinctBy { it.id },next=page.next,visible=page.visible,loaded=true)))
+}
 data class PendingDirectMessage(val text: String,val clientId: String)
 data class DirectChatState(val peer: UserProfile?=null,val messages: List<DirectMessage> = emptyList(),
     val loading: Boolean=false,val loaded: Boolean=false,val hasOlder: Boolean=false,val peerLastRead: Long=0,
@@ -25,11 +39,15 @@ data class CommunityState(val profiles: Map<String,SocialProfile> = emptyMap(),v
     val profileErrors: Map<String,String> = emptyMap(),val followBusy: Set<String> = emptySet(),
     val people: Map<String,PeopleState> = emptyMap(),val inbox: InboxState=InboxState(),
     val chats: Map<String,DirectChatState> = emptyMap(),val connected: Boolean=false,val connecting: Boolean=false,
-    val opening: Boolean=false,val notice: String?=null,val requiresSignIn: Boolean=false)
+    val opening: Boolean=false,val notice: String?=null,val requiresSignIn: Boolean=false,
+    val publicFavorites: Map<String,PublicFavoritesState> = emptyMap(),val favoriteTypes: Map<String,ResourceType> = emptyMap(),
+    val sharing: FavoriteSharingState=FavoriteSharingState())
 
 /** Pause online work without discarding messages, pending send nonces, people or drafts. */
 fun CommunityState.sessionRequired(required: Boolean)=copy(
     requiresSignIn=required,connected=false,connecting=false,opening=false,notice=null,
+    sharing=sharing.copy(busy=false,error=if(required)sharing.error else null),
+    publicFavorites=publicFavorites.mapValues { (_,page)->page.copy(loading=false,error=if(required)page.error else null) },
     profileLoading=emptySet(),followBusy=emptySet(),profileErrors=if(required)profileErrors else emptyMap(),
     people=people.mapValues { (_,page)->page.copy(loading=false,error=if(required)page.error else null) },
     inbox=inbox.copy(loading=false,error=if(required)inbox.error else null),

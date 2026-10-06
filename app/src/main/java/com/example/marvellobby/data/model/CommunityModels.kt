@@ -11,6 +11,8 @@ data class DirectConversation(val id: String,val peer: UserProfile,val unread: I
 data class InboxPage(val items: List<DirectConversation>,val next: Int?,val unreadTotal: Int)
 data class DirectPage(val peer: UserProfile,val items: List<DirectMessage>,val hasMore: Boolean,val peerLastRead: Long)
 data class CommunityEvent(val type: String,val conversationId: String?=null)
+data class PublicFavorite(val id: Int,val type: ResourceType,val name: String,val imageUrl: String?)
+data class PublicFavoritesPage(val items: List<PublicFavorite>,val next: Int?,val visible: Boolean)
 
 /** ACKs and live deliveries may race. One server identity/client nonce always occupies one bubble. */
 fun mergeDirectMessages(existing: List<DirectMessage>,incoming: List<DirectMessage>): List<DirectMessage> =

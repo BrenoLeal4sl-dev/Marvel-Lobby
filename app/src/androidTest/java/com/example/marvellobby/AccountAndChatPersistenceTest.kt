@@ -47,6 +47,7 @@ class AccountAndChatPersistenceTest {
         try {
             val accounts=AccountRepository(db.archive(),PreferencesStore(context))
             val originalProfile=accounts.register("First","old@account.test","Password2026","Password2026")
+            accounts.bio("old@account.test","Minha bio 🕷️")
             accounts.register("Second","taken@account.test","Password2026","Password2026")
             val saved=StoredRecord().apply { owner="old@account.test";recordKey="CHARACTER:1";payload="{}";favorite=true }
             db.archive().save(saved)
@@ -63,6 +64,10 @@ class AccountAndChatPersistenceTest {
             assertTrue(runCatching { accounts.login("new@account.test","Password2026") }.isFailure)
             assertEquals("Updated",accounts.login("new@account.test","NewPassword2026").name)
             assertEquals(originalProfile.username,accounts.profile("new@account.test")!!.username)
+            assertEquals("Minha bio 🕷️",accounts.profile("new@account.test")!!.bio)
+            assertEquals("Minha bio 🕷️",accounts.login("new@account.test","NewPassword2026").bio)
+            assertTrue(runCatching { accounts.bio("new@account.test","🕷".repeat(281)) }.isFailure)
+            assertEquals("",accounts.bio("new@account.test","").bio)
         } finally { db.close() }
     }
     @Test fun versionOneMigrationPreservesExistingAccountAndRecords() = runBlocking {
@@ -73,7 +78,7 @@ class AccountAndChatPersistenceTest {
         original.execSQL("INSERT INTO accounts VALUES ('existing@test.local','Existing','hash','salt','')")
         original.execSQL("INSERT INTO records VALUES ('existing@test.local','CHARACTER:1','{}',1,123)")
         original.version=1;original.close()
-        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_1_2,MarvelDatabase.MIGRATION_2_3,MarvelDatabase.MIGRATION_3_4).build()
+        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_1_2,MarvelDatabase.MIGRATION_2_3,MarvelDatabase.MIGRATION_3_4,MarvelDatabase.MIGRATION_4_5).build()
         try {
             assertEquals("Existing",db.archive().account("existing@test.local").name)
             assertTrue(com.example.marvellobby.data.model.Usernames.valid(db.archive().account("existing@test.local").username))
@@ -108,7 +113,7 @@ class AccountAndChatPersistenceTest {
         original.execSQL("INSERT INTO accounts VALUES ('b@test.local','Breno','hash','salt','')")
         original.execSQL("INSERT INTO conversations VALUES ('chat-v2','a@test.local','Saved chat','{}',123)")
         original.version=2;original.close()
-        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_2_3,MarvelDatabase.MIGRATION_3_4).build()
+        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_2_3,MarvelDatabase.MIGRATION_3_4,MarvelDatabase.MIGRATION_4_5).build()
         try {
             val first=db.archive().account("a@test.local").username
             assertTrue(com.example.marvellobby.data.model.Usernames.valid(first))

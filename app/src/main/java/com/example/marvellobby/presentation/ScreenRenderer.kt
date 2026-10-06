@@ -63,6 +63,7 @@ class ScreenRenderer(val activity: MainActivity,val vm: MainViewModel,val state:
             "chats" -> chatHistory()
             "profile" -> profile()
             "editProfile" -> editProfile()
+            "editBio" -> editBio()
             "connectAccount" -> connectAccount()
             "publicProfile" -> publicProfile()
             "community" -> community()

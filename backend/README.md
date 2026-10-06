@@ -1,6 +1,17 @@
 # API do Marvel Lobby — identidade e comunidade
 
-Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, seguir/seguidores e mensagens privadas. Solicitações de amizade, push e sincronização da biblioteca não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
+Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, bio, seguir/seguidores, mensagens privadas e favoritos publicados por escolha do usuário. Solicitações de amizade, push e sincronização completa da biblioteca entre dispositivos não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
+
+## Bio e favoritos públicos
+
+Execute `database/005_public_favorites.sql` no banco `marvel_mobile`, como administrador, depois da migração de comunidade. O script instala a versão 4 e concede acesso ao usuário restrito da API; pode ser executado novamente sem apagar dados.
+
+- `PATCH /v1/me/bio`: atualiza somente a bio, até 280 caracteres Unicode; não exige mudar senha, nome, username ou avatar.
+- `GET` / `PUT /v1/community/me/favorite-sharing`: consulta ou altera a visibilidade. Começa privada.
+- `POST /v1/community/me/favorites`: aplica até 20 alterações por lote. Recebe tipo, ID Comic Vine, nome, imagem e estado de favorito. O dono vem da sessão, nunca do corpo da requisição.
+- `GET /v1/community/users/:id/favorites?type=character&offset=0&limit=12`: página por categoria (`character`, `power`, `team`, `story_arc`); retorna `visible`, `items`, `next`. Perfil privado não retorna itens nem contagens.
+
+O Android mantém favoritos no Room e uma fila durável de publicação/remoção. Uploads são repetíveis; uma confirmação antiga não remove uma alteração local mais recente. Ativar a visibilidade publica a biblioteca existente antes de exibi-la. Ocultar altera a privacidade antes de qualquer upload. Falhas preservam os favoritos locais e a fila; a sincronização retoma ao entrar no app, reconectar ou tentar novamente. Histórico, descrições completas e chats de IA não são publicados. Somente imagens HTTPS dos hosts Comic Vine aprovados são retornadas. A política RLS permite leitura pública apenas quando a opção está ativada e mantém escrita restrita ao próprio usuário.
 
 ## Rodar no computador
 

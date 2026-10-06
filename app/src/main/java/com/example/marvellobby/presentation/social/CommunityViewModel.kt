@@ -27,6 +27,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     val userId get()=owner.removePrefix("remote:")
     val online get()=owner.startsWith("remote:")
     private val canRequest get()=online && !state.value.requiresSignIn
+    init { viewModelScope.launch { app.library.favoriteChanges.collect { changed -> if(changed==owner)syncFavorites() } } }
     init { viewModelScope.launch {
         combine(app.preferences.flow.map { it.session },app.onlineAccounts.sessionValidity) { session,validity ->
             session to validity[session]
@@ -38,22 +39,23 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                 if(changed) { drafts.clear();readThrough.clear();owner=session;mutable.value=CommunityState() }
                 mutable.update { it.sessionRequired(valid==false) }
             }
-            if(changed || recovering) { enter();startLive();if(recovering)loadInbox() }
+            if(changed || recovering) { enter();startLive();if(canRequest)syncFavorites();if(recovering)loadInbox() }
         }
     } }
     private fun error(e: Exception)=when(e) {
         is LobbyApiException -> e.message.orEmpty()
         else -> "Community connection unavailable. Your messages remain saved on the server."
     }
-    fun foreground(value: Boolean) { foreground=value;if(value){startLive();enter()}else{live?.cancel();live=null;mutable.update { it.copy(connected=false,connecting=false) }} }
+    private fun favoriteError(e: Exception)=if(e is LobbyApiException)e.message.orEmpty() else "Could not update favorites. Try again when connected."
+    fun foreground(value: Boolean) { foreground=value;if(value){startLive();enter();if(canRequest)syncFavorites()}else{live?.cancel();live=null;mutable.update { it.copy(connected=false,connecting=false) }} }
     fun route(value: Route) { if(route==value)return;route=value;enter() }
     private fun enter() {
         if(!canRequest)return
         when(route.screen) {
             "community","socialPeople" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
             "inbox" -> if(!state.value.inbox.loaded)loadInbox()
-            "publicProfile" -> route.userId?.let { loadProfile(it) }
-            "profile" -> loadProfile(userId)
+            "publicProfile" -> route.userId?.let { loadProfile(it);loadFavorites(it) }
+            "profile" -> { loadProfile(userId);syncFavorites() }
             "directChat" -> route.userId?.let { id -> if(state.value.chats[id]?.loaded!=true)loadChat(id) else syncChat(id) }
         }
     }
@@ -70,6 +72,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                         if(event.type=="ready") {
                             wait=2_000L;mutable.update { it.copy(connected=true,connecting=false) }
                             loadInbox();loadProfile(userId)
+                            syncFavorites()
                             if(route.screen in listOf("community","socialPeople") && state.value.people[route.key]?.loading!=true)loadPeople()
                             if(route.screen=="directChat")route.userId?.let { syncChat(it) }
                         }
@@ -80,7 +83,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                         if(event.type=="community") {
                             loadProfile(userId)
                             if(route.screen in listOf("community","socialPeople") && state.value.people[route.key]?.loading!=true)loadPeople()
-                            if(route.screen=="publicProfile")route.userId?.let { loadProfile(it) }
+                            if(route.screen=="publicProfile")route.userId?.let { loadProfile(it);loadFavorites(it) }
                         }
                     }
                 } catch(cancelled: CancellationException) { throw cancelled }
@@ -97,6 +100,60 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
             try { val profile=app.community.profile(forOwner,id);if(owner==forOwner)mutable.update { it.copy(profiles=it.profiles+(id to profile),profileLoading=it.profileLoading-id) } }
             catch(cancelled: CancellationException) { throw cancelled }
             catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(profileLoading=it.profileLoading-id,profileErrors=it.profileErrors+(id to error(e))) } }
+        }
+    }
+    fun favoriteType(id: String)=state.value.favoriteTypes[id] ?: ResourceType.CHARACTER
+    fun selectFavoriteType(id: String,type: ResourceType) {
+        require(type.canFavorite)
+        mutable.update { it.copy(favoriteTypes=it.favoriteTypes+(id to type)) }
+        loadFavorites(id)
+    }
+    fun loadFavorites(id: String,more: Boolean=false) {
+        if(!canRequest)return
+        val type=favoriteType(id);val key="$id:${type.name}"
+        val old=state.value.publicFavorites[key] ?: PublicFavoritesState()
+        if(jobs["favorites:$key"]?.isActive==true || (more && old.next==null))return
+        val forOwner=owner
+        mutable.update { it.copy(publicFavorites=it.publicFavorites+(key to old.copy(loading=true,error=null))) }
+        jobs["favorites:$key"]=viewModelScope.launch {
+            try {
+                val page=app.publicFavorites.list(forOwner,id,type,if(more)old.next!! else 0)
+                if(owner==forOwner)mutable.update { it.receiveFavorites(id,type,page,more) }
+            } catch(cancelled: CancellationException) { throw cancelled }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(publicFavorites=it.publicFavorites+(key to old.copy(loading=false,error=favoriteError(e)))) } }
+        }
+    }
+    fun shareFavorites(enabled: Boolean) {
+        if(!canRequest || state.value.sharing.busy)return
+        val forOwner=owner
+        mutable.update { it.copy(sharing=it.sharing.copy(busy=true,error=null)) }
+        jobs["favorite-sync"]=viewModelScope.launch {
+            try {
+                app.publicFavorites.chooseSharing(forOwner,enabled)
+                val result=app.publicFavorites.sync(forOwner)
+                if(owner==forOwner) {
+                    mutable.update { it.copy(sharing=FavoriteSharingState(result)) }
+                    if(route.screen=="publicProfile")route.userId?.let { loadFavorites(it) }
+                }
+            } catch(cancelled: CancellationException) { throw cancelled }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(sharing=it.sharing.copy(busy=false,error=favoriteError(e))) } }
+        }
+    }
+    fun syncFavorites() {
+        if(!canRequest)return
+        if(jobs["favorite-sync"]?.isActive==true) {
+            if(jobs["favorite-resync"]?.isActive!=true)jobs["favorite-resync"]=viewModelScope.launch {
+                jobs["favorite-sync"]?.join();syncFavorites()
+            }
+            return
+        }
+        val forOwner=owner;mutable.update { it.copy(sharing=it.sharing.copy(busy=true,error=null)) }
+        jobs["favorite-sync"]=viewModelScope.launch {
+            try {
+                val result=app.publicFavorites.sync(forOwner)
+                if(owner==forOwner)mutable.update { it.copy(sharing=FavoriteSharingState(result)) }
+            } catch(cancelled: CancellationException) { throw cancelled }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(sharing=it.sharing.copy(busy=false,error=favoriteError(e))) } }
         }
     }
     fun follow(id: String) {

@@ -53,6 +53,8 @@ export async function createApp(db: Database,options: {passwords?:Passwords;logg
     async request=>accounts.refresh(request.body.refreshToken));
   app.post('/v1/auth/logout',async(request,reply)=> { await accounts.logout(await principal(request));return reply.code(204).send(); });
   app.get('/v1/me',async request=>accounts.me(await principal(request)));
+  app.patch<{Body:{bio:string}}>('/v1/me/bio',{schema:{body:object({bio:string(0,560)},['bio'])}},
+    async request=>accounts.bio(await principal(request),request.body.bio));
   app.patch<{Body:ProfileInput}>('/v1/me',{schema:{body:object(profileFields,['name','username','bio','avatarId'])}},
     async request=>accounts.update(await principal(request),request.body));
   app.patch<{Body:CredentialInput}>('/v1/me/credentials',{config:limited,schema:{body:object({email:string(3,254),currentPassword:string(1,128),newPassword:string(0,128),profile:object(profileFields,['name','username','bio','avatarId'])},['email','currentPassword'])}},

@@ -266,7 +266,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             row.addView(ui.icon("back","Back") { goBack() })
             val title=when(state.route.screen) {
-                "login","register"->"Account";"editProfile"->"Edit Profile";"privacy"->"Privacy & terms"
+                "login","register"->"Account";"editProfile"->"Edit Profile";"editBio"->"Biography";"privacy"->"Privacy & terms"
                 "connectAccount"->"Connect online account";"publicProfile"->"Public profile"
                 "community"->"Community";"inbox"->"Messages";"directChat"->"Messages"
                 "socialPeople"->if(state.route.title=="following")"Following" else "Followers"

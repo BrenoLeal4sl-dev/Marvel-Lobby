@@ -97,6 +97,14 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
         require(UUID.fromString(id).toString()==id)
         mutex.withLock { LobbyProtocol.profile(authorized(owner,"GET","/v1/users/$id"),::avatar) }
     }
+    suspend fun bio(owner: String,value: String)=withContext(Dispatchers.IO) {
+        val text=value.trim();require(text.codePointCount(0,text.length)<=280) { "Keep your bio within 280 characters." }
+        mutex.withLock {
+            val profile=LobbyProtocol.profile(authorized(owner,"PATCH","/v1/me/bio",JSONObject().put("bio",text)),::avatar)
+            require(profile.ownerKey==owner);currentCoroutineContext().ensureActive()
+            dao.saveRemoteAccount(row(profile));profile
+        }
+    }
     suspend fun communityRequest(owner: String,method: String,path: String,body: JSONObject?=null)=withContext(Dispatchers.IO) {
         require(path.startsWith("/v1/community/"))
         mutex.withLock { authorized(owner,method,path,body) }

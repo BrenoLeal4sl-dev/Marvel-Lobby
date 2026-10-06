@@ -2,6 +2,16 @@ package com.example.marvellobby.presentation
 
 object Translations {
     private val portuguese=mapOf(
+        "Your next chapter\nstarts here." to "Sua história\ncomeça aqui.",
+        "Enter your\nMarvel universe." to "Entre no seu\nuniverso Marvel.",
+        "Discover stories. Find your people." to "Descubra histórias. Encontre sua turma.",
+        "Your favorites, stories and people, together." to "Seus favoritos, histórias e amigos, juntos.",
+        "your_username" to "seu_usuario",
+        "8–128 chars" to "8–128 caracteres",
+        "One letter" to "Uma letra",
+        "One number" to "Um número",
+        "Already have an account?" to "Já tem uma conta?",
+        "New to Marvel Lobby?" to "Novo no Marvel Lobby?",
         "ME / ACCESS" to "CONTA / ACESSO",
         "ARCHIVE / 00" to "ARQUIVO / 00",
         "A universe of connections" to "Um universo de conexões",

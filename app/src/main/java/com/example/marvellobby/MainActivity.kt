@@ -16,6 +16,7 @@ import androidx.core.view.*
 import androidx.lifecycle.*
 import com.example.marvellobby.presentation.*
 import com.example.marvellobby.presentation.social.*
+import com.example.marvellobby.presentation.auth.authLanguageButton
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -258,6 +259,9 @@ class MainActivity : AppCompatActivity() {
         val row=ui.row().apply { setPadding(ui.dp(20),ui.dp(10),ui.dp(20),ui.dp(10)) }
         if(state.route.screen=="language") {
             row.addView(ui.brandLogo(48).apply { scaleType=ImageView.ScaleType.FIT_START },LinearLayout.LayoutParams(ui.dp(140),-1))
+        } else if(state.route.screen in listOf("login","register")) {
+            row.addView(ui.brandLogo(44).apply { scaleType=ImageView.ScaleType.FIT_START;translationX=-ui.dp(10).toFloat() },LinearLayout.LayoutParams(0,-1,1f))
+            row.addView(authLanguageButton(this,vm,state,ui),LinearLayout.LayoutParams(-2,ui.dp(44)))
         } else if(state.route.screen=="home") {
             val brand=FrameLayout(this)
             brand.addView(ui.brandLogo(48).apply { scaleType=ImageView.ScaleType.FIT_START;translationX=-ui.dp(12).toFloat() },FrameLayout.LayoutParams(ui.dp(120),-1,Gravity.START or Gravity.CENTER_VERTICAL))

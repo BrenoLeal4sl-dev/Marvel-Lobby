@@ -1,6 +1,7 @@
 package com.example.marvellobby.presentation.auth
 
 import android.widget.LinearLayout
+import android.view.View
 import androidx.appcompat.app.AlertDialog
 import com.example.marvellobby.presentation.ScreenRenderer
 
@@ -30,3 +31,19 @@ fun ScreenRenderer.languageMenu() {
     }.apply { tag="auth:language";isEnabled=!state.authBusy })
     add(row,16)
 }
+
+fun authLanguageButton(activity:com.example.marvellobby.MainActivity,vm:com.example.marvellobby.presentation.MainViewModel,state:com.example.marvellobby.presentation.AppState,ui:com.example.marvellobby.presentation.UiKit):View =
+    ui.text(if(state.preferences.language=="pt")"PT · Português" else "EN · English",12,ui.palette.text,true).apply {
+        gravity=android.view.Gravity.CENTER
+        setPadding(ui.dp(12),0,ui.dp(12),0)
+        minimumHeight=ui.dp(44)
+        ui.clickable(this,ui.palette.surface) {
+            AlertDialog.Builder(activity).setTitle("Idioma / Language")
+                .setSingleChoiceItems(arrayOf("Português","English"),if(state.preferences.language=="pt")0 else 1) { dialog,index ->
+                    vm.language(if(index==0)"pt" else "en");dialog.dismiss()
+                }.show()
+        }
+        background=ui.shape(ui.palette.surface,14,true)
+        tag="auth:language";isEnabled=!state.authBusy
+        contentDescription="Idioma / Language: "+if(state.preferences.language=="pt")"Português" else "English"
+    }

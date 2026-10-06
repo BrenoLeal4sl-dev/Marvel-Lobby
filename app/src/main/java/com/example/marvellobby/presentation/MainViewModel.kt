@@ -147,9 +147,9 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
         navigate(Route("login"),replace=true)
         mutable.update { it.copy(formError="Sign in again to continue.") }
     }
-    fun authenticate(register: Boolean,name: String,email: String,password: String,confirmation: String,online: Boolean=false,username: String="") {
+    fun authenticate(register: Boolean,name: String,email: String,password: String,confirmation: String,username: String="") {
         if(state.value.authBusy) return
-        val invalid=AuthValidation.validate(register,online,name,email,password,confirmation,username)
+        val invalid=AuthValidation.validate(register,true,name,email,password,confirmation,username)
         if(invalid.isNotEmpty()) {
             authTouched.addAll(invalid.keys)
             mutable.update { it.copy(authErrors=invalid,formError=invalid.values.first()) };return
@@ -158,15 +158,13 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
         jobs["auth"]=viewModelScope.launch {
             try {
                 if(register)require(password==confirmation) { "Passwords do not match." }
-                val profile=if(online) {
-                    require(onlineAvailable) { "The online service is not configured yet." }
-                    if(register)app.onlineAccounts.register(name,email,password,username) else app.onlineAccounts.login(email,password)
-                } else if(register)app.accounts.register(name,email,password,confirmation) else app.accounts.login(email,password)
+                require(onlineAvailable) { "The online service is not configured yet." }
+                val profile=if(register)app.onlineAccounts.register(name,email,password,username) else app.onlineAccounts.login(email,password)
                 sessionLock.withLock {
                     currentCoroutineContext().ensureActive()
                     withContext(NonCancellable) {
                         owner=profile.ownerKey
-                        if(online)app.preferences.session(owner)
+                        app.preferences.session(owner)
                         mutable.update { it.copy(user=profile,authBusy=false) }
                     }
                 }

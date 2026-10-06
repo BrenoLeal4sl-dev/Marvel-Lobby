@@ -2,6 +2,14 @@
 
 Atualizado em 06/10/2026.
 
+## Redesign da entrada e autenticação online — 06/10/2026
+
+- Login e cadastro passam a autenticar exclusivamente na API online. Removido o seletor de conta local e o fallback local do ViewModel, incluindo rascunhos antigos que selecionavam esse modo. Registros já existentes permanecem no armazenamento para preservar a biblioteca e a possibilidade de vinculação de uma conta antiga.
+- Entrada refeita com logo no topo, seletor compacto de idioma, composição com arte de personagens já incluída no app, degradê vermelho, formulário agrupado e bordas mais discretas. Campos incluem ícones e o botão de mostrar senha integrado à caixa de texto. Nome tem limite indicado na própria legenda; senha apresenta três indicadores compactos que se atualizam ao digitar.
+- Entrar / Criar conta é a única ação primária. Troca entre login e cadastro e acesso como visitante são links menores. Não há botões de recuperação de senha sem um fluxo implementado. Loading, validação por campo, idioma salvo e ocultação de senha ao sair permanecem ativos.
+
+Validação: compilação e 80 testes unitários Android passaram; lint sem erros. Dois testes nativos passaram, agora verificando que uma seleção antiga de conta local não oculta o username nem muda a validação online. A primeira tentativa nativa perdeu o foco por ANR do System UI do emulador; depois de recuperar a interface, o mesmo fluxo passou. A revisão visual ajustou espaçamentos e altura do banner ao conteúdo para evitar corte do título. Sem mudança de banco, envio de cadastro válido à produção ou instalação no celular.
+
 ## Cadastro, login e idioma inicial — 06/10/2026
 
 - Primeiro acesso apresenta uma escolha bilíngue Português / English após a splash, antes de Welcome ou autenticação. A escolha fica no DataStore; selecionar idioma não conclui o onboarding. Usuários que já escolheram um idioma continuam com a preferência atual. Sessão e destino anterior são preservados ao selecionar idioma numa instalação antiga.

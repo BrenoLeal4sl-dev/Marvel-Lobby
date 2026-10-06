@@ -44,11 +44,16 @@ class AuthOnboardingUiTest {
             waitFor(scenario) { ViewModelProvider(it)[MainViewModel::class.java].state.value.route.screen=="welcome" }
             assertTrue(app.preferences.flow.first().languageChosen)
             assertFalse("Language selection alone must not complete onboarding",app.preferences.flow.first().onboarded)
-            scenario.onActivity { ViewModelProvider(it)[MainViewModel::class.java].onboarding(true) }
+            scenario.onActivity {
+                val vm=ViewModelProvider(it)[MainViewModel::class.java]
+                vm.drafts["auth:local"]="true" // An old mode selection must never enable local signup again.
+                vm.onboarding(true)
+            }
             waitFor(scenario) { input(it,"confirm")!=null }
             scenario.onActivity { activity ->
                 assertNotNull(input(activity,"username"))
                 val hints=all(activity.window.decorView).filterIsInstance<TextView>().map { it.text.toString() }
+                assertFalse(hints.any { it.contains("conta local") || it.contains("local account") })
                 assertTrue(hints.any { it.contains("Sem pontos, espaços ou acentos") })
                 assertTrue(hints.any { it.contains("Letras maiúsculas e símbolos são opcionais") })
                 input(activity,"name").setText("Breno")
@@ -91,6 +96,7 @@ class AuthOnboardingUiTest {
             waitFor(scenario) { ViewModelProvider(it)[MainViewModel::class.java].state.value.route.screen=="login" }
             scenario.onActivity { activity ->
                 assertEquals("pt",ViewModelProvider(activity)[MainViewModel::class.java].state.value.preferences.language)
+                assertFalse(all(activity.window.decorView).filterIsInstance<TextView>().any { it.text.contains("conta local") })
                 assertTrue(tagged(activity,"auth:submit").performClick())
             }
             waitFor(scenario) { tagged(it,"auth:email:error").visibility==View.VISIBLE }

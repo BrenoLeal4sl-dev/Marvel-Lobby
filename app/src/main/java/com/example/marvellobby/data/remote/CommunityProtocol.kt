@@ -35,7 +35,28 @@ object CommunityProtocol {
     private fun message(json: JsonObject): DirectMessage {
         val body=json.text("text");require(body.isNotBlank() && body.codePointCount(0,body.length)<=2000)
         return DirectMessage(json.number("id").also { require(it>0) },uuid(json.text("conversationId")),uuid(json.text("senderId")),
-            uuid(json.text("clientId")),body,Instant.parse(json.text("sentAt")).toEpochMilli())
+            uuid(json.text("clientId")),body,Instant.parse(json.text("sentAt")).toEpochMilli(),
+            json.get("shared")?.takeUnless { it.isJsonNull }?.let { shared(it.asJsonObject) })
+    }
+    private fun shared(json: JsonObject): SharedContent {
+        val type=ResourceType.entries.single { it.resource==json.text("type") }
+        require(type.canFavorite)
+        val id=json.count("id");val name=json.text("name");require(id>0 && name.isNotBlank() && name.length<=400)
+        return SharedContent(type,id,name,json.get("imageUrl")?.takeUnless { it.isJsonNull }?.asString)
+    }
+    fun activity(text: String,avatar: (Int?)->String)=safe {
+        val json=parse(text)
+        ActivityPage(json.getAsJsonArray("items").map { element -> val item=element.asJsonObject
+            CommunityActivity(profile(item.getAsJsonObject("actor"),avatar),shared(item.getAsJsonObject("content")),Instant.parse(item.text("at")).toEpochMilli())
+        },json.get("next")?.takeUnless { it.isJsonNull }?.asInt)
+    }
+    fun notifications(text: String,avatar: (Int?)->String)=safe {
+        val json=parse(text)
+        NotificationPage(json.getAsJsonArray("items").map { element -> val item=element.asJsonObject
+            val kind=item.text("kind");require(kind in setOf("follow","message"))
+            CommunityNotification(item.text("key"),kind,profile(item.getAsJsonObject("actor"),avatar),Instant.parse(item.text("at")).toEpochMilli(),item.get("read").asBoolean,
+                item.get("conversationId")?.takeUnless { it.isJsonNull }?.asString?.let(::uuid))
+        },json.get("next")?.takeUnless { it.isJsonNull }?.asInt,json.count("unread"))
     }
     fun message(text: String)=safe { message(parse(text)) }
     fun conversation(text: String,avatar: (Int?)->String)=safe {

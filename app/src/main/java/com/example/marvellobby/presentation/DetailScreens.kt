@@ -31,6 +31,9 @@ fun ScreenRenderer.detail() {
     else if(entity.appearanceCount>0)label("${entity.appearanceCount} / ISSUE APPEARANCES")
     catalogDescription(entity)
     button("Ask Marvel AI",false) { vm.ask(entity) }
+    if(entity.type.canFavorite && state.user?.online==true)button("Share a record",false) {
+        if(activity.community.state.value.requiresSignIn)vm.reauthenticate() else activity.community.prepareShare(entity)
+    }
     relationships("POWERS",ResourceType.POWER,entity.powers)
     relationships("RELATED / TEAMS",ResourceType.TEAM,entity.teams)
     relationships(entity.characterRelationshipLabel,ResourceType.CHARACTER,entity.characters)

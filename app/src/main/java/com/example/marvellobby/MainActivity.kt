@@ -293,6 +293,7 @@ class MainActivity : AppCompatActivity() {
                 "login","register"->"Account";"editProfile"->"Edit Profile";"editBio"->"Biography";"privacy"->"Privacy & terms"
                 "connectAccount"->"Connect online account";"publicProfile"->"Public profile"
                 "community"->"Community";"inbox"->"Messages";"directChat"->"Messages"
+                "activity"->"Following activity";"notifications"->"Notifications";"shareContent"->"Share a record";"socialPrivacy"->"Activity privacy";"cloudSync"->"Cloud synchronization"
                 "socialPeople"->if(state.route.title=="following")"Following" else "Followers"
                 "history"->"Recently Viewed";"chats"->"Conversation history";"ai"->"Marvel AI";"catalog"->when(state.route.type?.name) {
                     "CHARACTER"->"Characters";"TEAM"->"Teams";"POWER"->"Powers";else->"Story Arcs"

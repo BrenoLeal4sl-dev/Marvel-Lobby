@@ -1,5 +1,13 @@
 # Banco do Marvel Lobby — Aiven + pgAdmin
 
+## Atualização social e sincronização — 06/10/2026
+
+Após `005_public_favorites.sql`, execute `006_social_extensions.sql` e `007_private_sync.sql`, nessa ordem, como administrador em **marvel_mobile**. O usuário confirmou a execução, e a leitura real verificou TLS, função restrita, versões **1 a 6** e permissões de leitura das novas tabelas.
+
+A versão 5 acrescenta cards em mensagens, atividades limitadas a seguidores com consentimento e estados privados de leitura das notificações. A versão 6 cria `private_archive`, com payloads privados, versões monotônicas e exclusões representadas por payload nulo. `cloud_sync` começa desativado. O backend serializa gravações por usuário antes de alocar a revisão, evitando saltos na paginação incremental. O Android usa Room v6 com fila persistente; conflitos de conversas divergentes geram uma cópia preservada.
+
+As tabelas antigas `view_history`, `conversations` e `messages` permanecem preservadas; a sincronização implementada usa `private_archive`. Mensagens entre pessoas usam `direct_messages`. As observações das fases anteriores abaixo documentam a evolução do esquema.
+
 ## Favoritos públicos — atualização atual
 
 Com a comunidade instalada (versão 3), execute inteiro `005_public_favorites.sql` no Query Tool do banco **marvel_mobile**, como administrador. A migração instala a versão **4**, preserva contas e mensagens e concede as permissões ao usuário `marvel_lobby_api`.

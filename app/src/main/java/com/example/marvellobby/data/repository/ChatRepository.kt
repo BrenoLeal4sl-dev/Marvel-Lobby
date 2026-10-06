@@ -25,5 +25,5 @@ class ChatRepository(private val dao: ArchiveDao) {
     suspend fun load(owner: String,id: String): ChatSnapshot?=withContext(Dispatchers.IO) {
         dao.conversation(owner,id)?.let { runCatching { gson.fromJson(it.payload,ChatSnapshot::class.java) }.getOrNull() }
     }
-    suspend fun delete(owner: String,id: String)=withContext(Dispatchers.IO) { dao.deleteConversation(owner,id) }
+    suspend fun delete(owner: String,id: String)=withContext(Dispatchers.IO) { dao.deleteConversationWithSync(owner,id) }
 }

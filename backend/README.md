@@ -2,7 +2,7 @@
 
 Erros `INVALID_INPUT` de autenticação podem incluir `error.field` (`name`, `username`, `email` ou `password`) para indicar o campo recusado. O cliente valida antes de enviar e associa a mensagem ao campo. Respostas nunca incluem valores enviados, senhas ou detalhes internos; login incorreto continua sem revelar a existência da conta. A política de senha permanece 8–128 caracteres, uma letra e um número, com maiúsculas/símbolos opcionais.
 
-Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, bio, seguir/seguidores, mensagens privadas e favoritos publicados por escolha do usuário. Solicitações de amizade, push e sincronização completa da biblioteca entre dispositivos não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
+Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, bio, seguir/seguidores, mensagens privadas com cards, favoritos publicados por escolha do usuário, atividades, notificações internas e sincronização privada opcional de histórico/conversas de IA. Solicitações de amizade, push do Android e recuperação de conta não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
 
 ## Bio e favoritos públicos
 
@@ -104,6 +104,18 @@ Todos os endpoints abaixo exigem Bearer token. Perfis incluem apenas nome, @user
 
 RLS limita conversa, texto e leitura aos dois participantes. A API valida a sessão dentro da transação e verifica o destinatário ativo. O envio usa um bloqueio transacional por conversa antes de alocar IDs, evitando lacunas na busca incremental causadas por commits fora de ordem. Reenvio com a mesma identidade e texto devolve a mensagem salva; reutilização para outro texto retorna 409. Limite de 40 envios/minuto por IP, além do limite global.
 
-WebSocket envia apenas sinais, sem corpo das mensagens. Depois do sinal, o Android consulta HTTPS autenticado; preserva rascunho/teclado e mescla respostas repetidas. Ao reconectar, recupera mensagens novas. Leitura é enviada quando o usuário está vendo o fim da conversa. O histórico de mensagens diretas fica no PostgreSQL e é recuperável em outro dispositivo com a mesma conta; os chats de IA continuam locais. Rascunhos e cache social são temporários, não há envio offline em segundo plano.
+WebSocket envia apenas sinais, sem corpo das mensagens. Depois do sinal, o Android consulta HTTPS autenticado; preserva rascunho/teclado e mescla respostas repetidas. Ao reconectar, recupera mensagens novas. Leitura é enviada quando o usuário está vendo o fim da conversa. O histórico de mensagens diretas fica no PostgreSQL e é recuperável em outro dispositivo com a mesma conta. Chats de IA podem usar a sincronização privada opcional. Rascunhos de mensagens diretas e cache social são temporários, sem envio offline em segundo plano.
 
-O realtime e o limitador usam memória de uma instância. Escalar requer distribuição dos eventos/limites. O plano gratuito pode suspender o servidor, causando demora na reconexão. Transporte usa TLS; não há criptografia de ponta a ponta, anexos, moderação, bloqueio de usuários, push ou feed neste pedido.
+O realtime e o limitador usam memória de uma instância. Escalar requer distribuição dos eventos/limites. O plano gratuito pode suspender o servidor, causando demora na reconexão. Transporte usa TLS; não há criptografia de ponta a ponta, upload de anexos, moderação, bloqueio de usuários ou push do Android.
+
+## Extensões sociais e arquivo privado
+
+Aplicar `006_social_extensions.sql` e `007_private_sync.sql` antes de publicar; confirmação do usuário e verificação TLS das versões 1–6 em 06/10/2026.
+
+- O envio de mensagem aceita `shared: {type,id,name,imageUrl}` opcional para os quatro tipos favoritos. A identidade de envio também protege contra troca do anexo em uma repetição. Imagens ficam restritas aos hosts Comic Vine.
+- `GET /v1/community/activity?offset=0`: até 30 atividades de pessoas seguidas que habilitaram a preferência. `GET/PUT /v1/community/me/activity-sharing` lê/altera `{enabled}`. Desativar remove as atividades anteriores.
+- `GET /v1/community/notifications?offset=0`: até 30 notificações e contagem não lida; `POST /v1/community/notifications/read` recebe `{keys}` (até 100). Consulta deriva eventos das relações/mensagens autorizadas, sem copiar textos privados. Leitura no chat também marca mensagens como lidas no centro.
+- `GET/PUT /v1/archive/settings` lê/altera `{enabled}`. `GET /v1/archive?after=0` retorna um registro por página e `more`; `PUT /v1/archive` recebe `{key,scope,base,nonce,payload}`. Resposta `{accepted,record}` informa conflito sem sobrescrever. `payload:null` propaga exclusão.
+- Arquivo aceita `history` e `chat`; limite de 800 mil caracteres por snapshot, até 2 mil mensagens de 64 mil caracteres e 100 fontes por conversa. Requisição limitada a 1 MB. Dados maiores permanecem no aparelho com falha de sincronização, sem truncar mensagens. Registros privados têm RLS por dono, nonce de operação e versão independente da hora do aparelho.
+
+Validação local: `npm test` cobre os fluxos antigos e novos em PostgreSQL temporário, incluindo isolamento entre três contas, privacidade, idempotência e conflitos. Não cria dados de teste na Aiven.

@@ -33,7 +33,7 @@ class LobbyApi(baseUrl: String): LobbyTransport {
                 val output=StringBuilder();val buffer=CharArray(4096)
                 while(true) {
                     val count=reader.read(buffer);if(count<0)break
-                    val maximum=if(relative.path.startsWith("/v1/community/"))256_000 else 64_000
+                    val maximum=if(relative.path.startsWith("/v1/archive"))1_000_000 else if(relative.path.startsWith("/v1/community/"))256_000 else 64_000
                     if(output.length+count>maximum)throw java.io.IOException("Invalid online service response.")
                     output.append(buffer,0,count)
                 }

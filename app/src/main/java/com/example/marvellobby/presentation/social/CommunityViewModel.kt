@@ -21,6 +21,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     private var route=Route("splash")
     private var foreground=false
     private var live: Job?=null
+    private var cloudLoop: Job?=null
     private val jobs=mutableMapOf<String,Job>()
     private val readThrough=mutableMapOf<String,Long>()
     val drafts=mutableMapOf<String,String>()
@@ -35,11 +36,11 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
             val changed=owner!=session
             val recovering=!changed && state.value.requiresSignIn && valid==true
             if(changed || valid==false || recovering) {
-                live?.cancel();live=null;jobs.values.forEach { it.cancel() };jobs.clear()
+                live?.cancel();live=null;cloudLoop?.cancel();cloudLoop=null;jobs.values.forEach { it.cancel() };jobs.clear()
                 if(changed) { drafts.clear();readThrough.clear();owner=session;mutable.value=CommunityState() }
                 mutable.update { it.sessionRequired(valid==false) }
             }
-            if(changed || recovering) { enter();startLive();if(canRequest)syncFavorites();if(recovering)loadInbox() }
+            if(changed || recovering) { enter();startLive();startCloud();if(canRequest)syncFavorites();if(recovering)loadInbox() }
         }
     } }
     private fun error(e: Exception)=when(e) {
@@ -47,12 +48,41 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         else -> "Community connection unavailable. Your messages remain saved on the server."
     }
     private fun favoriteError(e: Exception)=if(e is LobbyApiException)e.message.orEmpty() else "Could not update favorites. Try again when connected."
-    fun foreground(value: Boolean) { foreground=value;if(value){startLive();enter();if(canRequest)syncFavorites()}else{live?.cancel();live=null;mutable.update { it.copy(connected=false,connecting=false) }} }
+    fun foreground(value: Boolean) { foreground=value;if(value){startLive();startCloud();enter();if(canRequest)syncFavorites()}else{live?.cancel();live=null;cloudLoop?.cancel();cloudLoop=null;mutable.update { it.copy(connected=false,connecting=false) }} }
+    private fun startCloud() {
+        if(!foreground || !canRequest || cloudLoop?.isActive==true)return
+        cloudLoop=viewModelScope.launch { while(isActive && foreground && canRequest) { syncCloud();delay(60_000) } }
+    }
+    fun syncCloud(choice: Boolean?=null) {
+        if(!canRequest)return
+        if(choice!=null)jobs["cloud"]?.cancel() else if(jobs["cloud"]?.isActive==true)return
+        val forOwner=owner;mutable.update { it.copy(cloud=it.cloud.copy(busy=true,error=null)) }
+        jobs["cloud"]=viewModelScope.launch {
+            try {
+                if(choice!=null)app.cloud.choose(forOwner,choice)
+                val enabled=choice ?: app.cloud.enabled(forOwner)
+                val title=if(app.preferences.flow.first().language=="pt")"Conversa preservada" else "Recovered conversation"
+                val recovered=if(enabled)app.cloud.sync(forOwner,title)>0 else false
+                val pending=app.cloud.pending(forOwner)
+                if(owner==forOwner)mutable.update { it.copy(cloud=it.cloud.copy(enabled=enabled,busy=false,pending=pending,
+                    lastSync=if(enabled)System.currentTimeMillis() else it.cloud.lastSync,recovered=it.cloud.recovered||recovered)) }
+            } catch(c: CancellationException) { throw c }
+            catch(e: Exception) {
+                val pending=app.cloud.pending(forOwner)
+                if(owner==forOwner)mutable.update { it.copy(cloud=it.cloud.copy(busy=false,pending=pending,error=
+                    if(e is LobbyApiException)e.message.orEmpty() else "Could not synchronize. Your records remain saved on this device.")) }
+            }
+        }
+    }
     fun route(value: Route) { if(route==value)return;route=value;enter() }
     private fun enter() {
         if(!canRequest)return
         when(route.screen) {
-            "community","socialPeople" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
+            "community","socialPeople","shareContent" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
+            "activity" -> { loadActivity();activityPrivacy() }
+            "notifications" -> loadNotifications()
+            "socialPrivacy" -> activityPrivacy()
+            "cloudSync" -> syncCloud()
             "inbox" -> if(!state.value.inbox.loaded)loadInbox()
             "publicProfile" -> route.userId?.let { loadProfile(it);loadFavorites(it) }
             "profile" -> { loadProfile(userId);syncFavorites() }
@@ -69,11 +99,15 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                 try {
                     app.community.events(forOwner).collect { event ->
                         if(owner!=forOwner)return@collect
+                        if(event.type in listOf("ready","community","messages","read")) {
+                            loadNotifications()
+                            if(route.screen=="activity")loadActivity()
+                        }
                         if(event.type=="ready") {
                             wait=2_000L;mutable.update { it.copy(connected=true,connecting=false) }
                             loadInbox();loadProfile(userId)
                             syncFavorites()
-                            if(route.screen in listOf("community","socialPeople") && state.value.people[route.key]?.loading!=true)loadPeople()
+                            if(route.screen in listOf("community","socialPeople","shareContent") && state.value.people[route.key]?.loading!=true)loadPeople()
                             if(route.screen=="directChat")route.userId?.let { syncChat(it) }
                         }
                         if(event.type=="messages" || event.type=="read") {
@@ -180,6 +214,55 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         loadPeople()
         loadInbox()
         loadProfile(userId)
+        loadNotifications()
+    }
+    fun prepareShare(entity: ComicEntity) {
+        if(!canRequest || !entity.type.canFavorite)return
+        mutable.update { it.copy(shareContent=SharedContent.from(entity),notice=null) }
+        navigation.trySend(Route("shareContent"))
+    }
+    fun loadActivity(more: Boolean=false) {
+        if(!canRequest||jobs["activity"]?.isActive==true)return
+        val prior=state.value.activity;if(more && prior.next==null)return
+        val forOwner=owner;mutable.update { it.copy(activity=it.activity.copy(loading=true,error=null)) }
+        jobs["activity"]=viewModelScope.launch {
+            try { val page=app.community.activity(forOwner,if(more)prior.next!! else 0)
+                if(owner==forOwner)mutable.update { it.copy(activity=ActivityState(
+                    ((if(more)prior.items else emptyList())+page.items).distinctBy { a->"${a.actor.id}:${a.content.type}:${a.content.id}" },page.next,loaded=true)) }
+            } catch(c: CancellationException) { throw c }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(activity=it.activity.copy(loading=false,error=error(e))) } }
+        }
+    }
+    fun activityPrivacy(enabled: Boolean?=null) {
+        if(!canRequest||jobs["activity-privacy"]?.isActive==true)return
+        val forOwner=owner;mutable.update { it.copy(activitySharing=it.activitySharing.copy(busy=true,error=null)) }
+        jobs["activity-privacy"]=viewModelScope.launch {
+            try { val choice=app.community.activitySharing(forOwner,enabled)
+                if(owner==forOwner)mutable.update { it.copy(activitySharing=FavoriteSharingState(choice)) }
+            } catch(c: CancellationException) { throw c }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(activitySharing=it.activitySharing.copy(busy=false,error=error(e))) } }
+        }
+    }
+    fun loadNotifications(more: Boolean=false) {
+        if(!canRequest||jobs["notifications"]?.isActive==true)return
+        val prior=state.value.notifications;if(more && prior.next==null)return
+        val forOwner=owner;mutable.update { it.copy(notifications=it.notifications.copy(loading=true,error=null)) }
+        jobs["notifications"]=viewModelScope.launch {
+            try { val page=app.community.notifications(forOwner,if(more)prior.next!! else 0)
+                if(owner==forOwner)mutable.update { it.copy(notifications=NotificationsState(
+                    ((if(more)prior.items else emptyList())+page.items).distinctBy { n->n.key },page.next,loaded=true,unread=page.unread)) }
+            } catch(c: CancellationException) { throw c }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(notifications=it.notifications.copy(loading=false,error=error(e))) } }
+        }
+    }
+    fun readNotifications(items: List<CommunityNotification>) {
+        if(!canRequest)return
+        val forOwner=owner
+        jobs["notification-read"]=viewModelScope.launch {
+            try { app.community.readNotifications(forOwner,items.filter { !it.read }.take(100).map { it.key });if(owner==forOwner)loadNotifications() }
+            catch(c: CancellationException) { throw c }
+            catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(notifications=it.notifications.copy(error=error(e))) } }
+        }
     }
     fun loadPeople(more: Boolean=false,debounce: Boolean=false) {
         if(!canRequest)return
@@ -217,13 +300,22 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
             catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(inbox=it.inbox.copy(loading=false,error=error(e))) } }
         }
     }
-    fun openConversation(id: String) {
+    fun openConversation(id: String,shared: SharedContent?=null) {
         if(!canRequest||state.value.opening)return
         val forOwner=owner;mutable.update { it.copy(opening=true,notice=null) }
         jobs["open"]=viewModelScope.launch {
             try { val conversation=app.community.open(forOwner,id)
+                if(owner==forOwner && shared!=null && state.value.chats[conversation.id]?.pending!=null) {
+                    mutable.update { it.copy(opening=false,notice="This conversation has a pending send. Open Messages and retry it before sharing another record.") }
+                    return@launch
+                }
                 if(owner==forOwner){mutable.update { it.copy(opening=false,chats=it.chats+(conversation.id to (it.chats[conversation.id] ?: DirectChatState(peer=conversation.peer)))) }
-                    navigation.send(Route("directChat",title=conversation.peer.name,userId=conversation.id))}
+                    navigation.send(Route("directChat",title=conversation.peer.name,userId=conversation.id))
+                    if(shared!=null) {
+                        chat(conversation.id) { it.copy(pending=PendingDirectMessage(shared.name,UUID.randomUUID().toString(),shared)) }
+                        mutable.update { it.copy(shareContent=null) };send(conversation.id,retry=true)
+                    }
+                }
             } catch(cancelled: CancellationException) { throw cancelled }
             catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(opening=false,notice=error(e)) } }
         }
@@ -272,9 +364,9 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         if(!retry && old.pending!=null)return // Resolve an ambiguous failed send before creating another nonce.
         val forOwner=owner;chat(id) { it.copy(sending=true,pending=pending,sendError=null) }
         jobs["send:$id"]=viewModelScope.launch {
-            try { val sent=app.community.send(forOwner,id,pending.text,pending.clientId)
+            try { val sent=app.community.send(forOwner,id,pending.text,pending.clientId,pending.shared)
                 if(owner==forOwner) {
-                    if(drafts[id]?.trim()==pending.text)drafts[id]=""
+                    if(pending.shared==null && drafts[id]?.trim()==pending.text)drafts[id]=""
                     chat(id) { it.acknowledge(sent) }
                     loadInbox();syncChat(id)
                 }

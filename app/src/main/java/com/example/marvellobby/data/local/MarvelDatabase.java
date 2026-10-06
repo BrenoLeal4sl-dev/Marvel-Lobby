@@ -1,7 +1,7 @@
 package com.example.marvellobby.data.local;
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
-@Database(entities={StoredRecord.class,LocalAccount.class,StoredConversation.class,RemoteAccount.class,AccountBinding.class,PublicFavoriteChange.class},version=5,exportSchema=false)
+@Database(entities={StoredRecord.class,LocalAccount.class,StoredConversation.class,RemoteAccount.class,AccountBinding.class,PublicFavoriteChange.class,CloudRecord.class},version=6,exportSchema=false)
 public abstract class MarvelDatabase extends RoomDatabase {
  public static final androidx.room.migration.Migration MIGRATION_1_2 = new androidx.room.migration.Migration(1,2) {
   @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
@@ -30,6 +30,11 @@ public abstract class MarvelDatabase extends RoomDatabase {
   }
  };
  public abstract ArchiveDao archive();
+ public static final androidx.room.migration.Migration MIGRATION_5_6 = new androidx.room.migration.Migration(5,6) {
+  @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
+   db.execSQL("CREATE TABLE cloud_records (owner TEXT NOT NULL,recordKey TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT,nonce TEXT,pending INTEGER NOT NULL,PRIMARY KEY(owner,recordKey))");
+  }
+ };
  public static final androidx.room.migration.Migration MIGRATION_4_5 = new androidx.room.migration.Migration(4,5) {
   @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
    db.execSQL("ALTER TABLE accounts ADD COLUMN bio TEXT NOT NULL DEFAULT ''");

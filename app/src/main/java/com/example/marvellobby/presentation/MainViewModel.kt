@@ -38,6 +38,19 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     val drafts=mutableMapOf<String,String>()
     val scrollPositions=mutableMapOf<String,Int>()
     private val gson=Gson()
+    init { viewModelScope.launch { app.cloud.changes.collect { changed -> if(changed==owner) { refreshLibrary();refreshChats() } } } }
+    init { viewModelScope.launch { app.cloud.changedChats.collect { (changed,id) ->
+        if(changed==owner && state.value.ai.conversationId==id) {
+            // React to an actual remote import, not a temporarily unsaved new local question.
+            aiJob?.cancel()
+            val snapshot=app.chats.load(changed,id)
+            if(changed==owner && state.value.ai.conversationId==id) {
+                saved["chatId"]=snapshot?.id
+                mutable.update { it.copy(ai=if(snapshot==null)AiState() else AiState(context=snapshot.context,
+                    messages=snapshot.messages,sources=snapshot.sources,conversationId=snapshot.id)) }
+            }
+        }
+    } } }
 
     init {
         viewModelScope.launch {

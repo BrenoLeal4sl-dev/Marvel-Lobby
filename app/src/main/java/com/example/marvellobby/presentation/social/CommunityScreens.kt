@@ -8,6 +8,7 @@ import android.widget.*
 import androidx.core.widget.doAfterTextChanged
 import com.example.marvellobby.presentation.*
 import com.example.marvellobby.data.repository.UserProfile
+import com.example.marvellobby.data.model.*
 import java.text.DateFormat
 import java.util.Date
 
@@ -37,6 +38,9 @@ fun ScreenRenderer.community() {
     body("Find your people. Share your next discovery.")
     val unread=social.state.value.inbox.unreadTotal
     menu("Messages",if(unread>0)"${ui.translate("Unread messages")}: $unread" else "Your private conversations") { vm.navigate(Route("inbox")) }
+    menu("Following activity","Discover what your people are saving") { vm.navigate(Route("activity")) }
+    val notifications=social.state.value.notifications.unread
+    menu("Notifications",if(notifications>0)"${ui.translate("Unread notifications")}: $notifications" else "Followers and messages") { vm.navigate(Route("notifications")) }
     peopleList()
 }
 
@@ -66,7 +70,7 @@ private fun ScreenRenderer.peopleList() {
     if(page.next!=null && !page.loading)button("Load more",false) { social.loadPeople(more=true) }
 }
 
-private fun ScreenRenderer.personRow(user: UserProfile,subtitle: String=user.bio,action: ()->Unit): View {
+internal fun ScreenRenderer.personRow(user: UserProfile,subtitle: String=user.bio,action: ()->Unit): View {
     val row=ui.row().apply { setPadding(ui.dp(14),ui.dp(16),ui.dp(14),ui.dp(16)) }
     row.addView(ui.avatar(user.avatar,user.name,56),LinearLayout.LayoutParams(ui.dp(56),ui.dp(56)))
     val words=ui.column()
@@ -122,7 +126,7 @@ fun ScreenRenderer.inbox() {
     }
     inbox.items.forEach { thread ->
         val last=thread.lastMessage
-        val preview=last?.text ?: ui.translate("Start a conversation")
+        val preview=last?.shared?.let { ui.translate("Shared record")+" · "+it.name } ?: last?.text ?: ui.translate("Start a conversation")
         val status=if(thread.unread>0)"${ui.translate("Unread messages")}: ${thread.unread}" else last?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(it.sentAt)) }.orEmpty()
         add(personRow(thread.peer,"$status\n$preview") { social.openThread(thread) },gap=12)
     }
@@ -145,10 +149,12 @@ fun ScreenRenderer.directChat() {
         val bubble=ui.column(16).apply {
             background=if(mine)ui.gradient(ui.palette.red,android.graphics.Color.parseColor("#A91529"),22) else ui.shape(ui.palette.surface,border=true)
         }
-        val text=ui.text(message.text,14,if(mine)android.graphics.Color.WHITE else ui.palette.text)
-        text.text=message.text // User content is never translated by the interface dictionary.
-        text.setTextIsSelectable(true)
-        ui.add(bubble,text,0)
+        if(message.shared!=null)ui.add(bubble,sharedCard(message.shared),0)
+        else {
+            val text=ui.text(message.text,14,if(mine)android.graphics.Color.WHITE else ui.palette.text)
+            text.text=message.text
+            text.setTextIsSelectable(true);ui.add(bubble,text,0)
+        }
         val time=DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(message.sentAt))
         val status=if(mine)" · ${ui.translate(if(message.id<=chat.peerLastRead)"Read" else "Sent")}" else ""
         ui.add(bubble,ui.text(time+status,10,if(mine)0xFFFFD8D5.toInt() else ui.palette.muted),8)
@@ -157,10 +163,89 @@ fun ScreenRenderer.directChat() {
         add(lane,gap=12)
     }
     if(chat.sending)add(ui.loading())
+    chat.pending?.shared?.let { add(sharedCard(it));body("Confirming shared record…") }
     chat.sendError?.let {
         body(it)
         button("Retry sending",false) { social.send(id,retry=true) }
     }
+}
+
+internal fun ScreenRenderer.sharedCard(record: SharedContent): View {
+    val box=ui.column(14).apply { background=ui.shape(ui.palette.raised,border=true) }
+    if(record.imageUrl!=null)ui.add(box,ui.image(record.imageUrl,140,record.name),0,140)
+    ui.add(box,ui.label(typeLabel(record.type)),12)
+    ui.add(box,ui.text(record.name,18,bold=true).apply { text=record.name },6)
+    ui.add(box,ui.text("Open record",12,ui.palette.secondary),10)
+    ui.clickable(box,onClick={ vm.open(record.type,ComicReference(record.id,record.name)) })
+    return box
+}
+
+fun ScreenRenderer.shareContent() {
+    if(!onlineCommunity())return
+    val record=social.state.value.shareContent
+    if(record==null) { body("Choose a record from its details to share.");return }
+    title("Share a record");add(sharedCard(record))
+    body("Choose someone to send this record to.")
+    val page=social.state.value.people[state.route.key] ?: PeopleState()
+    val field=ui.field("Search people by name or username",page.query,idKey="share:people")
+    field.doAfterTextChanged { social.searchPeople(it.toString()) };add(field,height=56)
+    if(page.loading || social.state.value.opening)add(ui.loading())
+    page.error?.let { sectionError(it) { social.loadPeople() } }
+    social.state.value.notice?.let(::body)
+    if(page.loaded && page.items.none { it.id!=social.userId })body("No people here yet")
+    page.items.filter { it.id!=social.userId }.forEach { person ->
+        add(personRow(person,ui.translate("Send shared record")) { social.openConversation(person.id!!,record) }.apply { isEnabled=!social.state.value.opening },gap=12)
+    }
+    if(page.next!=null && !page.loading)button("Load more",false) { social.loadPeople(more=true) }
+}
+
+fun ScreenRenderer.followingActivity() {
+    if(!onlineCommunity())return
+    title("Following activity");body("New favorites shared by people you follow.")
+    menu("Activity privacy") { vm.navigate(Route("socialPrivacy")) }
+    button("Refresh",false) { social.loadActivity() }
+    val page=social.state.value.activity
+    if(page.loading)add(ui.loading())
+    page.error?.let { sectionError(it) { social.loadActivity() } }
+    if(page.loaded && page.items.isEmpty())body("No activity yet. Follow people who choose to share their discoveries.")
+    page.items.forEach { item ->
+        add(personRow(item.actor,ui.translate("Saved a favorite")) { vm.navigate(Route("publicProfile",userId=item.actor.id)) })
+        add(sharedCard(item.content),gap=8)
+        body(DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(item.at)))
+    }
+    if(page.next!=null && !page.loading)button("Load more",false) { social.loadActivity(more=true) }
+}
+
+fun ScreenRenderer.notifications() {
+    if(!onlineCommunity())return
+    title("Notifications");body("Followers and messages")
+    val page=social.state.value.notifications
+    button("Refresh",false) { social.loadNotifications() }
+    if(page.items.any { !it.read })button("Mark this page as read",false) { social.readNotifications(page.items) }
+    if(page.loading)add(ui.loading())
+    page.error?.let { sectionError(it) { social.loadNotifications() } }
+    if(page.loaded && page.items.isEmpty())body("You're all caught up. New notifications will appear here.")
+    page.items.forEach { item ->
+        val caption=ui.translate(if(item.kind=="follow")"Started following you" else "Sent you a message")
+        val date=DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(item.at))
+        add(personRow(item.actor,"${if(!item.read)"● " else ""}$caption\n$date") {
+            social.readNotifications(listOf(item))
+            if(item.conversationId!=null)social.openThread(DirectConversation(item.conversationId,item.actor))
+            else vm.navigate(Route("publicProfile",userId=item.actor.id))
+        },gap=12)
+    }
+    if(page.next!=null && !page.loading)button("Load more",false) { social.loadNotifications(more=true) }
+}
+
+fun ScreenRenderer.socialPrivacy() {
+    if(!onlineCommunity())return
+    title("Activity privacy")
+    body("Only new favorites are shared with your followers. Your viewing history and AI conversations are never shown in this feed.")
+    body("Turning sharing off removes your existing activities. Turning it on again starts with future favorites.")
+    val choice=social.state.value.activitySharing
+    if(choice.busy)add(ui.loading())
+    choice.error?.let { sectionError(it) { social.activityPrivacy() } }
+    if(choice.enabled!=null)button(if(choice.enabled)"Stop sharing activity" else "Share new favorites with followers",false) { social.activityPrivacy(!choice.enabled) }
 }
 
 fun ScreenRenderer.directComposer(): View {

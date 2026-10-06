@@ -6,6 +6,7 @@ import type { Principal } from './contracts.js';
 import { Community,type CommunityEvent,type PageInput } from './community.js';
 import { unauthorized,ApiError } from './errors.js';
 import {PublicFavorites,FAVORITE_TYPES,type FavoriteInput} from './public-favorites.js';
+import {SocialExtras,type SharedContent} from './social-extras.js';
 
 export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   await app.register(websocket,{options:{maxPayload:256}});
@@ -16,7 +17,8 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
     }
   };
   const social=new Community(accounts,notify);
-  const favorites=new PublicFavorites(accounts);
+  const favorites=new PublicFavorites(accounts,notify);
+  const extras=new SocialExtras(accounts,notify);
   const auth=async(request:FastifyRequest)=> {
     const value=request.headers.authorization;if(!value?.startsWith('Bearer '))unauthorized();
     return accounts.authenticate(value.slice(7));
@@ -25,6 +27,13 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   const params={type:'object',properties:{id:uuid},required:['id'],additionalProperties:false};
   const page={type:'object',properties:{query:{type:'string',maxLength:81},after:{type:'string',maxLength:24},
     before:{type:'string',maxLength:19},limit:{type:'string',pattern:'^[0-9]{1,2}$'},offset:{type:'string',pattern:'^[0-9]{1,6}$'}},additionalProperties:false};
+  app.get('/v1/community/me/activity-sharing',async request=>extras.privacy(await auth(request)));
+  app.put<{Body:{enabled:boolean}}>('/v1/community/me/activity-sharing',{schema:{body:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false}}},
+    async request=>extras.share(await auth(request),request.body.enabled));
+  for(const destination of ['activity','notifications'] as const)app.get<{Querystring:PageInput}>(`/v1/community/${destination}`,{schema:{querystring:page}},
+    async request=>extras[destination==='activity'?'feed':'notifications'](await auth(request),Number(request.query.offset??0)));
+  app.post<{Body:{keys:string[]}}>('/v1/community/notifications/read',{schema:{body:{type:'object',properties:{keys:{type:'array',maxItems:100,items:{type:'string',minLength:1,maxLength:160}}},required:['keys'],additionalProperties:false}}},
+    async request=>extras.read(await auth(request),request.body.keys));
   app.get('/v1/community/me/favorite-sharing',async request=>favorites.status(await auth(request)));
   app.put<{Body:{enabled:boolean}}>('/v1/community/me/favorite-sharing',
     {schema:{body:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false}}},
@@ -56,9 +65,10 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   app.get<{Querystring:PageInput}>('/v1/community/conversations',{schema:{querystring:page}},async request=>social.inbox(await auth(request),request.query));
   app.get<{Params:{id:string};Querystring:PageInput}>('/v1/community/conversations/:id/messages',{schema:{params,querystring:page}},
     async request=>social.messages(await auth(request),request.params.id.toLowerCase(),request.query));
-  app.post<{Params:{id:string};Body:{text:string;clientId:string}}>('/v1/community/conversations/:id/messages',
-    {config:{rateLimit:{max:40,timeWindow:'1 minute'}},schema:{params,body:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:4000},clientId:uuid},required:['text','clientId'],additionalProperties:false}}},
-    async(request,reply)=>reply.code(201).send(await social.send(await auth(request),request.params.id.toLowerCase(),request.body.text,request.body.clientId.toLowerCase())));
+  app.post<{Params:{id:string};Body:{text:string;clientId:string;shared?:SharedContent}}>('/v1/community/conversations/:id/messages',
+    {config:{rateLimit:{max:40,timeWindow:'1 minute'}},schema:{params,body:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:4000},clientId:uuid,
+      shared:{type:'object',properties:{type:{type:'string',enum:FAVORITE_TYPES},id:{type:'integer',minimum:1,maximum:2147483647},name:{type:'string',minLength:1,maxLength:400},imageUrl:{type:['string','null'],maxLength:2048}},required:['type','id','name','imageUrl'],additionalProperties:false}},required:['text','clientId'],additionalProperties:false}}},
+    async(request,reply)=>reply.code(201).send(await social.send(await auth(request),request.params.id.toLowerCase(),request.body.text,request.body.clientId.toLowerCase(),request.body.shared)));
   app.post<{Params:{id:string};Body:{lastId:string}}>('/v1/community/conversations/:id/read',
     {schema:{params,body:{type:'object',properties:{lastId:{type:'string',pattern:'^[0-9]{1,19}$'}},required:['lastId'],additionalProperties:false}}},
     async request=>social.read(await auth(request),request.params.id.toLowerCase(),request.body.lastId));

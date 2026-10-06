@@ -2,6 +2,15 @@
 
 Atualizado em 06/10/2026.
 
+## Extensões sociais e sincronização privada — 06/10/2026
+
+- Detalhes de personagens, poderes, equipes e arcos permitem compartilhar um registro em conversas privadas. O destinatário abre o registro real pelo cartão. Repetições de envio mantêm identidade e nonce; um envio pendente não é substituído por outro compartilhamento.
+- Comunidade inclui atividades de quem você segue e notificações internas de seguidores/mensagens, com atualização, paginação e marcação de leitura. Publicação de novos favoritos exige consentimento; desativar remove atividades anteriores. Histórico e conversas de IA não entram no feed.
+- Configurações oferecem sincronização privada opcional do histórico e das conversas de IA entre aparelhos. Fila local durável, confirmações por nonce, revisões incrementais, remoções e recuperação de conversas divergentes preservam alterações locais. Pausar conserva cópias existentes e interrompe a sincronização.
+- Room 5→6 preserva os dados. Migrações PostgreSQL 006/007 foram executadas pelo usuário; a conferência real da Aiven confirmou versões 1–6, TLS e permissões do usuário restrito. RLS mantém arquivos privados por proprietário e mensagens por participante.
+- Validação: compilação Android passou; 84 testes unitários Android, 34 testes de backend e 21 testes nativos de persistência/identidade passaram. Um teste adicional renderizou seis telas nos dois temas e passou após recuperar ANRs do sistema do emulador e aguardar a conexão da acessibilidade. Capturas confirmaram os cartões compartilhados, controles e textos portugueses. Lint: 0 erros, 68 avisos existentes.
+- Testes usam dados sintéticos e banco temporário; nenhuma conta/mensagem fictícia foi gravada em produção e nenhuma instalação foi feita no celular. Notificações são internas ao aplicativo; recuperação de senha/e-mail permanece fora do escopo por decisão do usuário.
+
 ## Correção da interação e simplificação do login — 06/10/2026
 
 - Login substitui o banner e o cartão de formulário aninhado por título direto, campos maiores, exemplo de e-mail e botão Entrar destacado. Mantidos logo, vermelho, Plus Jakarta Sans e idiomas. O cadastro conserva sua composição visual.

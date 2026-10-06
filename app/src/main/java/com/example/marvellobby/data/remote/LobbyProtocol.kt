@@ -31,6 +31,10 @@ object LobbyProtocol {
         val field=data?.optString("field")?.takeIf { code=="INVALID_INPUT" && it in setOf("name","username","email","password") }
         // Fixed messages; never display arbitrary server/proxy HTML or private connection details.
         val message=when(code) {
+            "SOCIAL_NOT_READY" -> "The community update is not installed yet."
+            "SYNC_NOT_READY" -> "The synchronization update is not installed yet."
+            "SYNC_PAUSED" -> "Cloud synchronization is paused."
+            "SYNC_NONCE_CONFLICT" -> "Could not synchronize. Your records remain saved on this device."
             "USERNAME_TAKEN" -> "That username is already in use."
             "EMAIL_TAKEN" -> "An account with this email already exists."
             "INVALID_CREDENTIALS" -> "Email or password is incorrect."

@@ -21,7 +21,10 @@ fun CommunityState.receiveFavorites(userId: String,type: ResourceType,page: Publ
     return copy(publicFavorites=pages+(key to PublicFavoritesState(
         items=(prior+page.items).distinctBy { it.id },next=page.next,visible=page.visible,loaded=true)))
 }
-data class PendingDirectMessage(val text: String,val clientId: String)
+data class PendingDirectMessage(val text: String,val clientId: String,val shared: SharedContent?=null)
+data class ActivityState(val items: List<CommunityActivity> = emptyList(),val next: Int?=null,val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null)
+data class NotificationsState(val items: List<CommunityNotification> = emptyList(),val next: Int?=null,val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null,val unread: Int=0)
+data class CloudSyncState(val enabled: Boolean?=null,val busy: Boolean=false,val error: String?=null,val pending: Int=0,val lastSync: Long=0,val recovered: Boolean=false)
 data class DirectChatState(val peer: UserProfile?=null,val messages: List<DirectMessage> = emptyList(),
     val loading: Boolean=false,val loaded: Boolean=false,val hasOlder: Boolean=false,val peerLastRead: Long=0,
     val sending: Boolean=false,val pending: PendingDirectMessage?=null,val error: String?=null,val sendError: String?=null,
@@ -41,11 +44,14 @@ data class CommunityState(val profiles: Map<String,SocialProfile> = emptyMap(),v
     val chats: Map<String,DirectChatState> = emptyMap(),val connected: Boolean=false,val connecting: Boolean=false,
     val opening: Boolean=false,val notice: String?=null,val requiresSignIn: Boolean=false,
     val publicFavorites: Map<String,PublicFavoritesState> = emptyMap(),val favoriteTypes: Map<String,ResourceType> = emptyMap(),
-    val sharing: FavoriteSharingState=FavoriteSharingState())
+    val sharing: FavoriteSharingState=FavoriteSharingState(),val activity: ActivityState=ActivityState(),
+    val notifications: NotificationsState=NotificationsState(),val activitySharing: FavoriteSharingState=FavoriteSharingState(),val shareContent: SharedContent?=null,val cloud: CloudSyncState=CloudSyncState())
 
 /** Pause online work without discarding messages, pending send nonces, people or drafts. */
 fun CommunityState.sessionRequired(required: Boolean)=copy(
     requiresSignIn=required,connected=false,connecting=false,opening=false,notice=null,
+    activity=activity.copy(loading=false),notifications=notifications.copy(loading=false),activitySharing=activitySharing.copy(busy=false),
+    cloud=cloud.copy(busy=false),
     sharing=sharing.copy(busy=false,error=if(required)sharing.error else null),
     publicFavorites=publicFavorites.mapValues { (_,page)->page.copy(loading=false,error=if(required)page.error else null) },
     profileLoading=emptySet(),followBusy=emptySet(),profileErrors=if(required)profileErrors else emptyMap(),

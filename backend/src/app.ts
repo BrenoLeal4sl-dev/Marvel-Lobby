@@ -7,6 +7,7 @@ import { ScryptPasswords, AVATARS, type Passwords } from './security.js';
 import { ApiError, unauthorized } from './errors.js';
 import type { RegisterInput, ProfileInput, CredentialInput } from './contracts.js';
 import { communityRoutes } from './community-routes.js';
+import {PrivateSync,type ArchiveInput} from './private-sync.js';
 
 const string=(minLength=1,maxLength=128)=>({type:'string',minLength,maxLength});
 const profileFields={name:string(2,80),username:string(3,25),bio:string(0,560),avatarId:{type:['integer','null'],enum:[...AVATARS,null]}};
@@ -48,6 +49,11 @@ export async function createApp(db: Database,options: {passwords?:Passwords;logg
     return accounts.authenticate(authorization.slice(7));
   };
   await communityRoutes(app,accounts);
+  const archive=new PrivateSync(accounts);
+  app.get('/v1/archive/settings',async request=>archive.status(await principal(request)));
+  app.put<{Body:{enabled:boolean}}>('/v1/archive/settings',{schema:{body:object({enabled:{type:'boolean'}},['enabled'])}},async request=>archive.choose(await principal(request),request.body.enabled));
+  app.get<{Querystring:{after?:string}}>('/v1/archive',{schema:{querystring:object({after:{type:'string',pattern:'^[0-9]{1,19}$'}},[])}},async request=>archive.pull(await principal(request),request.query.after??'0'));
+  app.put<{Body:ArchiveInput}>('/v1/archive',{bodyLimit:1_000_000,schema:{body:object({key:string(1,100),scope:{type:'string',enum:['history','chat']},base:{type:'string',pattern:'^[0-9]{1,19}$'},nonce:{type:'string',format:'uuid'},payload:{type:['object','null']}},['key','scope','base','nonce','payload'])}},async request=>archive.put(await principal(request),request.body));
   app.get('/health',async()=>({status:'ok',service:'Marvel Lobby'}));
   app.post<{Body:RegisterInput}>('/v1/auth/register',{config:limited,schema:{body:object({
     ...profileFields,email:string(3,254),password:string(8,128)},['name','username','email','password'])}},

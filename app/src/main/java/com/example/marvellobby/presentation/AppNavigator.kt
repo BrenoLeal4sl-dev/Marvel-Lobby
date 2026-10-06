@@ -35,7 +35,7 @@ class AppNavigator {
     private fun Route.isRestorable(): Boolean = when(screen) {
         "publicProfile","directChat" -> userId?.let { runCatching { java.util.UUID.fromString(it).toString()==it }.getOrDefault(false) }==true
         "socialPeople" -> title in setOf("followers","following") && userId?.let { runCatching { java.util.UUID.fromString(it).toString()==it }.getOrDefault(false) }==true
-        "connectAccount","community","inbox" -> true
+        "connectAccount","community","inbox","activity","notifications","socialPrivacy","cloudSync" -> true
         "detail" -> type != null && id > 0
         "catalog" -> type != null
         "home", "explore", "search", "filters", "favorites", "ai", "chats", "profile",

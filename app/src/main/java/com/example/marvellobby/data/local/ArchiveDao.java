@@ -13,6 +13,7 @@ import java.util.List;
   if(toggle)record.favorite=!record.favorite;else record.viewedAt=viewedAt;
   save(record);
   if(toggle && target.startsWith("remote:"))queuePublicFavorite(record);
+  if(!toggle && target.startsWith("remote:"))queueCloudHistory(record);
  }
  @Insert(onConflict=OnConflictStrategy.REPLACE) void queuePublicChange(PublicFavoriteChange change);
  @Query("SELECT * FROM public_favorite_changes WHERE owner=:owner AND recordKey='@sharing' LIMIT 1") PublicFavoriteChange sharingChange(String owner);
@@ -75,7 +76,77 @@ import java.util.List;
   // A UUID belongs to a single account; never overwrite another owner's chat.
   if(previous==null && conversationOwner(conversation.id)!=null)return;
   insertConversation(conversation);
+  if(conversation.owner.startsWith("remote:"))queueCloud(conversation.owner,"chat:"+conversation.id,conversation.payload);
  }
  @Query("SELECT owner FROM conversations WHERE id = :id LIMIT 1") String conversationOwner(String id);
  @Query("DELETE FROM conversations WHERE owner = :owner AND id = :id") void deleteConversation(String owner,String id);
+ @Insert(onConflict=OnConflictStrategy.REPLACE) void saveCloud(CloudRecord record);
+ @Query("SELECT * FROM cloud_records WHERE owner=:owner AND recordKey=:key LIMIT 1") CloudRecord cloudRecord(String owner,String key);
+ @Query("SELECT * FROM cloud_records WHERE owner=:owner AND pending=1 ORDER BY recordKey LIMIT 20") List<CloudRecord> cloudChanges(String owner);
+ @Query("SELECT count(*) FROM cloud_records WHERE owner=:owner AND pending=1") int cloudPendingCount(String owner);
+ @Transaction default void queueCloud(String owner,String key,String payload) {
+  if(!owner.startsWith("remote:"))return;
+  CloudRecord row=cloudRecord(owner,key);if(row==null){row=new CloudRecord();row.owner=owner;row.recordKey=key;}
+  row.payload=payload;row.nonce=java.util.UUID.randomUUID().toString();row.pending=true;saveCloud(row);
+ }
+ default void queueCloudHistory(StoredRecord record) {
+  // Old or damaged snapshots must not make a local library update or account binding fail.
+  com.google.gson.JsonElement entity;
+  try { entity=com.google.gson.JsonParser.parseString(record.payload); }
+  catch(com.google.gson.JsonParseException invalid) { return; }
+  if(!entity.isJsonObject())return;
+  com.google.gson.JsonObject snapshot=new com.google.gson.JsonObject();
+  snapshot.add("entity",entity);snapshot.addProperty("viewedAt",record.viewedAt);
+  queueCloud(record.owner,"history:"+record.recordKey,snapshot.toString());
+ }
+ @Transaction default void seedCloud(String owner) {
+  for(StoredRecord record:records(owner))if(record.viewedAt>0 && cloudRecord(owner,"history:"+record.recordKey)==null)queueCloudHistory(record);
+  for(StoredConversation chat:conversations(owner))if(cloudRecord(owner,"chat:"+chat.id)==null)queueCloud(owner,"chat:"+chat.id,chat.payload);
+ }
+ @Transaction default void clearHistoryWithSync(String owner) {
+  for(StoredRecord record:records(owner))if(record.viewedAt>0)queueCloud(owner,"history:"+record.recordKey,null);
+  deleteHistory(owner);resetHistory(owner);
+ }
+ @Transaction default void deleteConversationWithSync(String owner,String id) {
+  if(conversation(owner,id)!=null)queueCloud(owner,"chat:"+id,null);deleteConversation(owner,id);
+ }
+ /** ACK only its nonce; a newer local edit must survive an in-flight request. */
+ @Transaction default void acknowledgeCloud(String owner,String key,String nonce,long revision) {
+  CloudRecord row=cloudRecord(owner,key);if(row==null)return;
+  row.revision=Math.max(row.revision,revision);
+  if(java.util.Objects.equals(row.nonce,nonce)){row.pending=false;row.nonce=null;}saveCloud(row);
+ }
+ @Transaction default boolean rebaseCloud(String owner,String key,String nonce,long revision,String payload) {
+  CloudRecord row=cloudRecord(owner,key);if(row==null || !java.util.Objects.equals(row.nonce,nonce))return false;
+  row.revision=revision;row.payload=payload;row.nonce=java.util.UUID.randomUUID().toString();saveCloud(row);return true;
+ }
+ @Transaction default boolean importCloud(String owner,String key,String payload,long revision,String expectedNonce) {
+  CloudRecord prior=cloudRecord(owner,key);
+  if(prior!=null && (prior.revision>revision || (!prior.pending && prior.revision==revision) || (prior.pending && !java.util.Objects.equals(prior.nonce,expectedNonce))))return false;
+  if(key.startsWith("history:")) {
+   String recordKey=key.substring(8);StoredRecord record=record(owner,recordKey);
+   if(payload==null) {if(record!=null){record.viewedAt=0;save(record);}}
+   else {
+    com.google.gson.JsonObject json=com.google.gson.JsonParser.parseString(payload).getAsJsonObject();
+    if(record==null){record=new StoredRecord();record.owner=owner;record.recordKey=recordKey;}
+    if(record.payload==null || record.payload.isEmpty())record.payload=json.get("entity").toString();record.viewedAt=json.get("viewedAt").getAsLong();save(record);
+   }
+  } else if(key.startsWith("chat:")) {
+   String id=key.substring(5);
+   if(payload==null)deleteConversation(owner,id);
+   else {
+    if(conversationOwner(id)!=null && !owner.equals(conversationOwner(id)))throw new IllegalStateException("Conversation belongs to another account.");
+    com.google.gson.JsonObject json=com.google.gson.JsonParser.parseString(payload).getAsJsonObject();
+    StoredConversation chat=new StoredConversation();chat.owner=owner;chat.id=id;chat.title=json.get("title").getAsString();chat.payload=payload;
+    chat.updatedAt=System.currentTimeMillis();insertConversation(chat);
+   }
+  }
+  CloudRecord row=new CloudRecord();row.owner=owner;row.recordKey=key;row.payload=payload;row.revision=revision;saveCloud(row);return true;
+ }
+ @Transaction default boolean forkCloud(String owner,String key,String nonce,String branchKey,String branchPayload,String remotePayload,long revision) {
+  CloudRecord prior=cloudRecord(owner,key);if(prior==null || !java.util.Objects.equals(prior.nonce,nonce))return false;
+  importCloud(owner,branchKey,branchPayload,0,null);queueCloud(owner,branchKey,branchPayload);
+  importCloud(owner,key,remotePayload,revision,nonce);
+  return true;
+ }
 }

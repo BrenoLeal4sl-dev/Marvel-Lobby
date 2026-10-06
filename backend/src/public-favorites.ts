@@ -5,7 +5,7 @@ import {ApiError,invalid} from './errors.js';
 
 export const FAVORITE_TYPES=['character','power','team','story_arc'] as const;
 export interface FavoriteInput {type:string;id:number;name:string;imageUrl:string|null;favorite:boolean}
-function image(value:string|null):string|null {
+export function catalogImage(value:string|null):string|null {
   if(value===null)return null;
   try {
     const url=new URL(value);
@@ -15,7 +15,7 @@ function image(value:string|null):string|null {
   return null;
 }
 export class PublicFavorites {
-  constructor(private readonly accounts:Accounts) {}
+  constructor(private readonly accounts:Accounts,private readonly notify:(users:string[],event:{type:'community'})=>void=()=>{}) {}
   private run<T>(who:Principal,action:(query:Query)=>Promise<T>) {
     return this.accounts.authorized(who,async query=> {
       if(!(await query.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=4')).length)
@@ -40,14 +40,20 @@ export class PublicFavorites {
     }
     return this.run(who,async query=> {
       await query.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`favorites:${who.userId}`]);
+      const extended=(await query.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=5')).length>0;
+      const sharing=extended && (await query.query('SELECT share_activity FROM marvel_lobby.preferences WHERE user_id=$1',[who.userId]))[0]?.share_activity===true;
       for(const item of items) {
+        const existed=sharing && (await query.query('SELECT 1 FROM marvel_lobby.public_favorites WHERE user_id=$1 AND resource_type=$2 AND comic_vine_id=$3',[who.userId,item.type,item.id])).length>0;
         if(item.favorite)await query.query(`INSERT INTO marvel_lobby.public_favorites(user_id,resource_type,comic_vine_id,name,image_url)
           VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id,resource_type,comic_vine_id) DO UPDATE SET name=excluded.name,image_url=excluded.image_url`,
-          [who.userId,item.type,item.id,item.name.trim(),image(item.imageUrl)]);
+          [who.userId,item.type,item.id,item.name.trim(),catalogImage(item.imageUrl)]);
         else await query.query('DELETE FROM marvel_lobby.public_favorites WHERE user_id=$1 AND resource_type=$2 AND comic_vine_id=$3',[who.userId,item.type,item.id]);
+        if(sharing && item.favorite && !existed)await query.query(`INSERT INTO marvel_lobby.activity(user_id,resource_type,comic_vine_id,name,image_url)
+          VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,[who.userId,item.type,item.id,item.name.trim(),catalogImage(item.imageUrl)]);
+        if(extended && !item.favorite)await query.query('DELETE FROM marvel_lobby.activity WHERE user_id=$1 AND resource_type=$2 AND comic_vine_id=$3',[who.userId,item.type,item.id]);
       }
-      return {ok:true};
-    });
+      return extended?(await query.query('SELECT follower_id FROM marvel_lobby.follows WHERE followed_id=$1',[who.userId])).map(r=>r.follower_id as string):[];
+    }).then(users=>{this.notify(users,{type:'community'});return {ok:true};});
   }
   list(who:Principal,id:string,type:string,offset:number,size:number) {
     if(!FAVORITE_TYPES.includes(type as typeof FAVORITE_TYPES[number]) || !Number.isInteger(offset) || offset<0 || offset>100000 ||

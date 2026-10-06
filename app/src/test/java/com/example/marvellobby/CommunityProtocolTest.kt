@@ -8,6 +8,15 @@ import org.junit.Test
 import java.io.IOException
 
 class CommunityProtocolTest {
+    @Test fun sharedCardsAndNewRoutesKeepCatalogIdentityAndNavigation() {
+        val card="""{"id":"1","conversationId":"22222222-2222-4222-8222-222222222222","senderId":"11111111-1111-4111-8111-111111111111","clientId":"33333333-3333-4333-8333-333333333333","text":"Flight","sentAt":"2026-10-05T12:00:00Z","shared":{"type":"power","id":1,"name":"Flight","imageUrl":null}}"""
+        assertEquals(ResourceType.POWER,CommunityProtocol.message(card).shared!!.type)
+        assertThrows(IOException::class.java) { CommunityProtocol.message(card.replace("\"power\"","\"issue\"")) }
+        for(screen in listOf("activity","notifications","socialPrivacy","cloudSync")) {
+            val nav=AppNavigator();nav.restore(Route(screen),listOf(Route("community")))
+            assertEquals(screen,nav.current.screen);assertEquals("community",nav.back(true)!!.screen)
+        }
+    }
     private val user="11111111-1111-4111-8111-111111111111"
     private val conversation="22222222-2222-4222-8222-222222222222"
     private val nonce="33333333-3333-4333-8333-333333333333"

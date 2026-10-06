@@ -77,6 +77,10 @@ fun ScreenRenderer.settings() {
     if(state.user?.email!="guest")menu("Edit Profile","Name · Email · Password") { vm.navigate(Route("editProfile")) }
     else menu("Create account") { vm.navigate(Route("register")) }
     label("PREFERENCES")
+    if(state.user?.online==true) {
+        menu("Activity privacy","Choose what your followers can see") { vm.navigate(Route("socialPrivacy")) }
+        menu("Cloud synchronization","Private history and AI conversations") { vm.navigate(Route("cloudSync")) }
+    }
     menu("Preferences","Appearance · Language") { vm.navigate(Route("preferences")) }
     label("APP")
     menu("About") { vm.navigate(Route("about")) }
@@ -112,7 +116,7 @@ fun ScreenRenderer.about() {
     body("Typography: Plus Jakarta Sans · SIL Open Font License.")
     body("Independent educational project. Marvel characters and related material belong to their respective rights holders. This app is not affiliated with Marvel.")
     if(!vm.onlineAvailable)body("Accounts, favorites and history are saved locally on this device.")
-    if(vm.onlineAvailable)body("Only favorites you choose to share appear on your public profile. The server receives their catalog name, image, type and ID. Your history and AI conversations remain on this device.")
+    if(vm.onlineAvailable)body("Only favorites you choose to share appear on your public profile. Activities show new favorites to followers only when enabled. History and AI conversations can optionally sync privately to your account.")
     menu("Privacy & terms") { vm.navigate(Route("privacy")) }
 }
 
@@ -124,9 +128,9 @@ fun ScreenRenderer.privacy() {
         label("ONLINE ACCOUNT")
         body("When you choose an online account, your name, username, biography, approved avatar and email are sent to the Marvel Lobby server over HTTPS. The server stores a password hash. Your public profile includes your name, username, biography, avatar and join date, without your email or password. Connecting a local account keeps its saved library on this device.")
     }
-    body("Only favorites you choose to share appear on your public profile. The server receives their catalog name, image, type and ID. Your history and AI conversations remain on this device.")
+    body("Only favorites you choose to share appear on your public profile. Activities show new favorites to followers only when enabled. History and AI conversations can optionally sync privately to your account.")
     label("Community")
-    body("Following connections and direct messages are stored on the Marvel Lobby server. Only the two participants can access a direct conversation through the app. AI chats remain separate and local.")
+    body("Following connections, shared records and direct messages are stored on the Marvel Lobby server. Only participants can access a direct conversation through the app. Notifications are shown inside the app. AI conversations are separate and private.")
     label("COMIC VINE")
     body("Search terms and record requests are sent to Comic Vine to load the catalog. Images are downloaded from the image addresses supplied by Comic Vine.")
     label("MARVEL AI")

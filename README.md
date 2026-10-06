@@ -25,16 +25,27 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Fluxos
 
-- Splash automática → Welcome no primeiro acesso → Cadastro/Login → Home. Sessão persistente e opção de visitante.
+- Escolha de idioma antes do primeiro acesso, splash automática, Welcome, cadastro/login online e sessão persistente.
 - Home, Explore, busca global por tipo, personagens, equipes, poderes e arcos, com detalhes e relacionamentos navegáveis.
 - Paginação `limit`/`offset`, ordenação de personagens, filtro Marvel e filtro por poder, estados de carregamento, vazio, erro e cache offline.
 - Favoritos de quatro tipos, histórico recente, perfil com avatares Marvel aprovados, edição de nome/e-mail/senha, logout, aparência e idioma.
 - Comunidade pela Home ou Perfil: busca por nome/@usuário, bio pública, seguidores/seguindo, caixa de entrada, chat direto, mensagens não lidas e confirmações de leitura. Exige conta online.
 - Marvel AI com mensagens, espera, erro e tentativa novamente. Aberto de um registro, envia seus dados Comic Vine como contexto para o Gemini e mostra as fontes consultadas.
 
-Sem `LOBBY_API_BASE_URL`, o cadastro continua **local ao dispositivo**, com hash PBKDF2 e salt. A primeira fase de identidade online está implementada em [backend/README.md](backend/README.md): cadastro/login, sessões renováveis, @username global, bio/avatar e perfil público sem e-mail. A API está publicada em `https://marvel-lobby-api.onrender.com`, conectada ao banco Aiven, e essa origem foi configurada no `local.properties` deste ambiente. Outros checkouts devem configurar a mesma propriedade e recompilar. A comunidade permite buscar pessoas, seguir/deixar de seguir, ver seguidores/seguindo e conversar por mensagens diretas persistidas no servidor, com atualização em tempo real.
+Configure `LOBBY_API_BASE_URL` no `local.properties` para habilitar cadastro/login online e os serviços sociais. A API está publicada em `https://marvel-lobby-api.onrender.com`, conectada ao banco Aiven; essa origem já está configurada localmente neste ambiente. Outros checkouts devem configurar a mesma propriedade e recompilar. Contratos e execução estão em [backend/README.md](backend/README.md). Não há fallback para criação de conta local.
 
-Com a URL configurada, o app oferece acesso online e opção local. Uma conta local pode ser associada explicitamente a uma conta online, preservando favoritos/histórico/conversas de IA em Room v4 neste aparelho. Tokens são cifrados no Android Keystore. Não há sincronização desses dados entre aparelhos nesta fase. Sair não apaga os registros; desinstalar ou limpar os dados os remove.
+Login e cadastro oferecem acesso online. Contas locais antigas continuam compatíveis e podem ser associadas a uma conta online. Tokens são cifrados no Android Keystore. Room v6 mantém biblioteca, conversas e alterações pendentes neste aparelho. A sincronização privada de histórico e conversas de IA é opcional, ativada em Configurações; sair não apaga os registros locais.
+
+### Recursos sociais e sincronização
+
+- Nos detalhes de personagens, equipes, poderes e arcos, **Compartilhar um registro** abre a seleção de destinatário. O chat recebe um card clicável com a identidade Comic Vine, sem reenviar a descrição inteira.
+- **Comunidade → Atividades** mostra novos favoritos das pessoas seguidas que optaram por compartilhar. **Configurações → Privacidade das atividades** controla a participação; desativar remove as atividades anteriores.
+- **Comunidade → Notificações** reúne seguidores e mensagens, com não lidas, paginação e marcação de leitura. São notificações internas, não push do Android.
+- **Configurações → Sincronização na nuvem** permite sincronizar histórico e conversas de IA entre aparelhos da mesma conta. O envio fica desativado por padrão. Usa snapshots compactos do catálogo e texto integral das mensagens dentro dos limites documentados da API; registros grandes demais permanecem locais com erro de sincronização.
+- Alterações pendentes e exclusões sobrevivem a reinícios. Versões impedem sobrescrever alterações concorrentes; respostas divergentes em uma conversa de IA são preservadas em conversas separadas. A sincronização ocorre ao abrir o app, periodicamente enquanto ele está em primeiro plano ou pelo botão **Sincronizar agora**. Pausar vale para a conta e mantém as cópias já enviadas.
+- Recuperação de senha/e-mail não faz parte deste escopo, conforme solicitado.
+
+Instalação adicional: execute `database/006_social_extensions.sql` e depois `database/007_private_sync.sql` como administrador no banco `marvel_mobile`, antes de publicar esta revisão. Ambos foram confirmados executados pelo usuário em 06/10/2026.
 
 ## Organização
 

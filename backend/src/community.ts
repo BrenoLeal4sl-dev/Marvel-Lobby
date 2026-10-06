@@ -3,6 +3,7 @@ import type { Accounts } from './accounts.js';
 import type { Principal, PublicProfile } from './contracts.js';
 import { iso } from './contracts.js';
 import { ApiError, invalid } from './errors.js';
+import {sharedContent,extrasReady,type SharedContent} from './social-extras.js';
 
 export type CommunityEvent={type:'community'|'messages'|'read';conversationId?:string};
 export interface PageInput {query?:string;after?:string;before?:string;limit?:string;offset?:string}
@@ -20,7 +21,7 @@ function profile(row:Row):PublicProfile {
 }
 function message(row:Row) {
   return {id:String(row.id),conversationId:row.conversation_id,senderId:row.sender_id,
-    clientId:row.client_id,text:row.body,sentAt:iso(row.sent_at)};
+    clientId:row.client_id,text:row.body,sentAt:iso(row.sent_at),shared:row.shared_content??null};
 }
 export class Community {
   constructor(private readonly accounts:Accounts,private readonly notify:(users:string[],event:CommunityEvent)=>void) {}
@@ -90,7 +91,7 @@ export class Community {
     if(!Number.isInteger(offset)||offset<0||offset>100_000)invalid();
     return this.run(principal,async query=> {
       const rows=await query.query(`SELECT c.id AS conversation_id,p.*,last_msg.id AS last_id,last_msg.sender_id AS last_sender,
-        last_msg.client_id AS last_client,last_msg.body AS last_body,last_msg.sent_at AS last_at,
+        last_msg.client_id AS last_client,last_msg.body AS last_body,last_msg.sent_at AS last_at,to_jsonb(last_msg)->'shared_content' AS last_shared,
         (SELECT count(*) FROM marvel_lobby.direct_messages m WHERE m.conversation_id=c.id
           AND m.sender_id<>$1 AND m.id>coalesce(r.last_read_id,0)) AS unread
         FROM marvel_lobby.direct_conversations c
@@ -103,7 +104,7 @@ export class Community {
         WHERE m.sender_id<>$1 AND m.id>coalesce(r.last_read_id,0)`,[principal.userId]))[0]!;
       return {unreadTotal:Number(total.unread),items:rows.slice(0,size).map(row=>({id:row.conversation_id,peer:profile(row),unread:Number(row.unread),
         lastMessage:row.last_id?message({id:row.last_id,conversation_id:row.conversation_id,sender_id:row.last_sender,
-          client_id:row.last_client,body:row.last_body,sent_at:row.last_at}):null})),next:rows.length>size?offset+size:null};
+          client_id:row.last_client,body:row.last_body,sent_at:row.last_at,shared_content:row.last_shared}):null})),next:rows.length>size?offset+size:null};
     });
   }
   async messages(principal:Principal,id:string,input:PageInput) {
@@ -122,7 +123,8 @@ export class Community {
         peerLastRead:String(read?.last_read_id??0)};
     });
   }
-  async send(principal:Principal,id:string,text:string,clientId:string) {
+  async send(principal:Principal,id:string,text:string,clientId:string,shared?:SharedContent) {
+    const attachment=sharedContent(shared);
     const body=text.trim();if(Array.from(body).length<1||Array.from(body).length>2000)invalid();
     const result=await this.run(principal,async query=> {
       const conversation=await this.conversation(query,id);
@@ -130,10 +132,13 @@ export class Community {
       // Allocate sequence IDs only after the preceding send in this conversation commits.
       // Otherwise an incremental reader could see ID 2 before ID 1 becomes visible.
       await query.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[id]);
-      const rows=await query.query(`INSERT INTO marvel_lobby.direct_messages(conversation_id,sender_id,client_id,body)
+      if(attachment)await extrasReady(query);
+      const rows=attachment?await query.query(`INSERT INTO marvel_lobby.direct_messages(conversation_id,sender_id,client_id,body,shared_content)
+        VALUES($1,$2,$3,$4,$5) ON CONFLICT(sender_id,client_id) DO NOTHING RETURNING *`,[id,principal.userId,clientId,body,attachment]):await query.query(`INSERT INTO marvel_lobby.direct_messages(conversation_id,sender_id,client_id,body)
         VALUES($1,$2,$3,$4) ON CONFLICT(sender_id,client_id) DO NOTHING RETURNING *`,[id,principal.userId,clientId,body]);
       const row=rows[0]??(await query.query('SELECT * FROM marvel_lobby.direct_messages WHERE sender_id=$1 AND client_id=$2',[principal.userId,clientId]))[0]!;
-      if(row.conversation_id!==id||row.body!==body)throw new ApiError(409,'MESSAGE_CONFLICT','This message identifier was already used.');
+      const existing=row.shared_content??null;
+      if(row.conversation_id!==id||row.body!==body||JSON.stringify(existing && [existing.type,existing.id,existing.name,existing.imageUrl])!==JSON.stringify(attachment && [attachment.type,attachment.id,attachment.name,attachment.imageUrl]))throw new ApiError(409,'MESSAGE_CONFLICT','This message identifier was already used.');
       return {message:message(row),users:[conversation.user_a,conversation.user_b] as string[]};
     });
     this.notify(result.users,{type:'messages',conversationId:id});return result.message;

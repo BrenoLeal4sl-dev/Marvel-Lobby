@@ -26,6 +26,6 @@ class LibraryRepository(private val dao: ArchiveDao) {
         }
     }
     suspend fun clearHistory(owner: String) = withContext(Dispatchers.IO) {
-        mutex.withLock { dao.deleteHistory(owner); dao.resetHistory(owner) }
+        mutex.withLock { dao.clearHistoryWithSync(owner) }
     }
 }

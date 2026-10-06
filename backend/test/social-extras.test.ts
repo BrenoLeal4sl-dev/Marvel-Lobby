@@ -1,0 +1,76 @@
+import {before,after,test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {createApp} from '../src/app.js';
+import {TestDatabase} from './database-fixture.js';
+import type {SessionResponse} from '../src/contracts.js';
+let db:TestDatabase,app:Awaited<ReturnType<typeof createApp>>,a:SessionResponse,b:SessionResponse,c:SessionResponse;
+const req=(method:'GET'|'POST'|'PUT'|'DELETE',url:string,who:SessionResponse,payload?:unknown)=>app.inject({method,url,payload:payload as any,headers:{authorization:`Bearer ${who.accessToken}`}});
+before(async()=> {
+ db=await TestDatabase.create();app=await createApp(db,{limit:10000});
+ const register=async(username:string)=>(await app.inject({method:'POST',url:'/v1/auth/register',payload:{name:username,username,email:`${username}@example.invalid`,password:'Password2026'},remoteAddress:username==='extra_a'?'10.0.0.1':'10.0.0.2'})).json<SessionResponse>();
+ a=await register('extra_a');b=await register('extra_b');c=await register('extra_c');
+});
+after(async()=>{await app?.close();await db?.close();});
+const shared={type:'character',id:1443,name:'Spider-Man',imageUrl:'https://example.invalid/private.png'};
+test('shared cards preserve identity, strip arbitrary images, are private and retries cannot change the attachment',async()=> {
+ const id=(await req('POST','/v1/community/conversations',a,{userId:b.user.id})).json().id;
+ const path=`/v1/community/conversations/${id}/messages`,payload={text:'Spider-Man',clientId:randomUUID(),shared};
+ const first=await req('POST',path,a,payload);assert.equal(first.statusCode,201,first.body);assert.equal(first.json().shared.imageUrl,null);
+ assert.equal((await req('POST',path,a,payload)).json().id,first.json().id);
+ assert.equal((await req('POST',path,a,{...payload,shared:{...shared,id:1440}})).statusCode,409);
+ assert.equal((await req('GET',path,c)).statusCode,404);
+ assert.equal((await req('GET',path,b)).json().items[0].shared.name,'Spider-Man');
+ assert.equal((await req('GET','/v1/community/conversations',b)).json().items[0].lastMessage.shared.id,1443);
+});
+test('activity is opt-in, visible only to followers, does not duplicate retries and disappears after opting out',async()=> {
+ await req('POST',`/v1/community/users/${a.user.id}/follow`,b);
+ const favorite={...shared,imageUrl:null,favorite:true};
+ await req('POST','/v1/community/me/favorites',a,{items:[favorite]});
+ assert.deepEqual((await req('GET','/v1/community/activity',b)).json().items,[]);
+ await req('PUT','/v1/community/me/activity-sharing',a,{enabled:true});
+ await req('POST','/v1/community/me/favorites',a,{items:[{...favorite,id:1440,name:'Thor'}]});
+ await req('POST','/v1/community/me/favorites',a,{items:[{...favorite,id:1440,name:'Thor'}]});
+ assert.equal((await req('GET','/v1/community/activity',b)).json().items.length,1);
+ assert.deepEqual((await req('GET','/v1/community/activity',c)).json().items,[]);
+ assert.deepEqual(await db.transaction(c.user.id,q=>q.query('SELECT * FROM marvel_lobby.activity')),[]);
+ await req('PUT','/v1/community/me/activity-sharing',a,{enabled:false});
+ await req('PUT','/v1/community/me/activity-sharing',a,{enabled:true});
+ assert.deepEqual((await req('GET','/v1/community/activity',b)).json().items,[]);
+});
+test('notification reads belong to their recipient; chat read receipts clear message notifications without exposing texts',async()=> {
+ const inbox=(await req('GET','/v1/community/conversations',b)).json();const id=inbox.items[0].id;
+ const page=(await req('GET','/v1/community/notifications',b)).json();const message=page.items.find((n:any)=>n.kind==='message');
+ assert.ok(message);assert.equal(message.text,undefined);assert.equal(message.actor.email,undefined);
+ await req('POST','/v1/community/notifications/read',c,{keys:[message.key,'forged']});
+ assert.deepEqual(await db.transaction(c.user.id,q=>q.query('SELECT * FROM marvel_lobby.notification_reads')),[]);
+ assert.equal((await req('GET','/v1/community/notifications',b)).json().items.find((n:any)=>n.key===message.key).read,false);
+ const last=(await req('GET',`/v1/community/conversations/${id}/messages`,b)).json().items.at(-1).id;
+ await req('POST',`/v1/community/conversations/${id}/read`,b,{lastId:last});
+ assert.equal((await req('GET','/v1/community/notifications',b)).json().items.find((n:any)=>n.key===message.key).read,true);
+});
+test('private sync requires explicit consent, isolates accounts and rejects stale edits or reused nonces',async()=> {
+ assert.equal((await req('GET','/v1/archive/settings',a)).json().enabled,false);
+ assert.equal((await req('GET','/v1/archive',a)).statusCode,409);
+ await req('PUT','/v1/archive/settings',a,{enabled:true});await req('PUT','/v1/archive/settings',c,{enabled:true});
+ const payload={key:'history:CHARACTER:1443',scope:'history',base:'0',nonce:randomUUID(),payload:{entity:{id:1443,type:'CHARACTER',name:'Spider-Man'},viewedAt:1000}};
+ const first=await req('PUT','/v1/archive',a,payload);assert.equal(first.statusCode,200,first.body);assert.equal(first.json().accepted,true);
+ assert.equal((await req('PUT','/v1/archive',a,payload)).json().record.revision,first.json().record.revision);
+ assert.equal((await req('PUT','/v1/archive',a,{...payload,payload:{...payload.payload,viewedAt:2000}})).statusCode,409);
+ const conflict=(await req('PUT','/v1/archive',a,{...payload,nonce:randomUUID()})).json();assert.equal(conflict.accepted,false);
+ assert.equal(conflict.record.revision,first.json().record.revision);
+ assert.deepEqual((await req('GET','/v1/archive',c)).json().items,[]);
+ assert.deepEqual(await db.transaction(c.user.id,q=>q.query('SELECT * FROM marvel_lobby.private_archive')),[]);
+ const removal=(await req('PUT','/v1/archive',a,{...payload,base:first.json().record.revision,nonce:randomUUID(),payload:null})).json();
+ assert.equal(removal.accepted,true);assert.ok(BigInt(removal.record.revision)>BigInt(first.json().record.revision));
+ assert.equal((await req('GET',`/v1/archive?after=${first.json().record.revision}`,a)).json().items[0].payload,null);
+ await req('PUT','/v1/archive/settings',a,{enabled:false});assert.equal((await req('PUT','/v1/archive',a,payload)).statusCode,409);
+});
+test('new migrations are repeatable and preserve records and old messages',async()=> {
+ await db.engine.exec('SET ROLE schema_admin');
+ for(const file of ['006_social_extensions.sql','007_private_sync.sql'])await db.engine.exec(readFileSync(new URL(`../../../database/${file}`,import.meta.url),'utf8'));
+ await db.engine.exec('RESET ROLE');
+ assert.equal((await req('GET','/v1/community/conversations',b)).json().items.length,1);
+ assert.equal((await req('GET','/v1/archive/settings',a)).json().enabled,false);
+});

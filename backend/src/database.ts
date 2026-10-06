@@ -48,4 +48,14 @@ export async function checkDatabase(db: Database): Promise<void> {
     await db.query('SELECT user_id,resource_type,comic_vine_id FROM marvel_lobby.public_favorites LIMIT 0');
     await db.query('SELECT user_id FROM marvel_lobby.favorite_sharing_profiles LIMIT 0');
   }
+  if(versions.some(row=>row.version===5)) {
+    await db.query('SELECT shared_content FROM marvel_lobby.direct_messages LIMIT 0');
+    await db.query('SELECT user_id FROM marvel_lobby.activity LIMIT 0');
+    await db.query('SELECT event_key FROM marvel_lobby.notification_reads LIMIT 0');
+    await db.query('SELECT user_id FROM marvel_lobby.activity_sharing_profiles LIMIT 0');
+  }
+  if(versions.some(row=>row.version===6)) {
+    await db.query('SELECT cloud_sync FROM marvel_lobby.preferences LIMIT 0');
+    await db.query('SELECT record_key,revision FROM marvel_lobby.private_archive LIMIT 0');
+  }
 }

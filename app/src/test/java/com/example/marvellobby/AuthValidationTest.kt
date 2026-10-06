@@ -50,7 +50,7 @@ class AuthValidationTest {
         assertEquals("home",StartupDestination.resolve(chosen.copy(onboarded=true),true,Route("login")).screen)
     }
     @Test fun validationMessagesAndPasswordHintsAreAvailableInBothLanguages() {
-        for(message in listOf(AuthValidation.USERNAME_HINT,AuthValidation.EMAIL_MESSAGE,PasswordRules.MESSAGE,"Enter your name.","Choose a username.","Enter your email.","Enter your password.","Confirm your password.","At least one letter","At least one number","Uppercase letters and symbols are optional.","Show password","Hide password")) {
+        for(message in listOf(AuthValidation.USERNAME_HINT,AuthValidation.EMAIL_MESSAGE,PasswordRules.MESSAGE,"Enter your name.","Choose a username.","Enter your email.","Enter your password.","Confirm your password.","At least one letter","At least one number","Uppercase letters and symbols are optional.","Show password","Hide password","ME / ACCESS","ARCHIVE / 00","A universe of connections","CHARACTERS / TEAMS / POWERS / STORIES / AI")) {
             assertEquals(message,Translations.text(message,"en"))
             assertNotEquals(message,Translations.text(message,"pt"))
         }

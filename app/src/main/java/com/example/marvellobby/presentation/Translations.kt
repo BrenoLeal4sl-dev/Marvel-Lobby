@@ -2,6 +2,10 @@ package com.example.marvellobby.presentation
 
 object Translations {
     private val portuguese=mapOf(
+        "ME / ACCESS" to "CONTA / ACESSO",
+        "ARCHIVE / 00" to "ARQUIVO / 00",
+        "A universe of connections" to "Um universo de conexões",
+        "CHARACTERS / TEAMS / POWERS / STORIES / AI" to "PERSONAGENS / EQUIPES / PODERES / HISTÓRIAS / IA",
         "Use 3–24 letters (a–z), numbers or underscores (_). No dots, spaces or accents." to "Use de 3 a 24 letras (a–z), números ou sublinhados (_). Sem pontos, espaços ou acentos.",
         "Enter your name." to "Digite seu nome.",
         "Choose a username." to "Escolha um nome de usuário.",

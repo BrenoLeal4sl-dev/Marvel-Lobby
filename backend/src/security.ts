@@ -5,16 +5,16 @@ const COST = 131_072; // OWASP scrypt baseline: N=2^17, r=8, p=1.
 export const AVATARS = [1440,1443,1455,1442,2268,2267,1444,3200];
 export function normalizeUsername(value: string): string {
   const username = value.trim().replace(/^@/, '').toLowerCase();
-  if(!/^[a-z0-9_]{3,24}$/.test(username) || !/[a-z0-9]/.test(username)) invalid('Use 3–24 letters, numbers or underscores for your username.');
+  if(!/^[a-z0-9_]{3,24}$/.test(username) || !/[a-z0-9]/.test(username)) invalid('Use 3–24 letters, numbers or underscores for your username.','username');
   return username;
 }
 export function validatePassword(value: string): void {
   if(value.length < 8 || value.length > 128 || !/\p{L}/u.test(value) || !/\p{N}/u.test(value))
-    invalid('Use 8–128 characters, including a letter and a number.');
+    invalid('Use 8–128 characters, including a letter and a number.','password');
 }
 export function normalizeEmail(value: string): string {
   const email = value.trim().toLowerCase();
-  if(email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) invalid('Enter a valid email address.');
+  if(email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) invalid('Enter a valid email address.','email');
   return email;
 }
 export interface Passwords { hash(value: string): Promise<string>; verify(value: string, encoded: string): Promise<boolean> }

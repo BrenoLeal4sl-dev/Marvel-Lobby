@@ -22,9 +22,14 @@ export async function createApp(db: Database,options: {passwords?:Passwords;logg
     reply.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');
   });
   app.setErrorHandler((error,request,reply)=> {
-    if(error instanceof ApiError) return reply.code(error.status).send({error:{code:error.code,message:error.message}});
+    if(error instanceof ApiError) return reply.code(error.status).send({error:{code:error.code,message:error.message,...(error.field?{field:error.field}:{})}});
     const failure=error as {validation?:unknown;code?:string;constraint?:string;statusCode?:number};
-    if(failure.validation) return reply.code(400).send({error:{code:'INVALID_INPUT',message:'Check the supplied fields.'}});
+    if(failure.validation) {
+      const validation=failure.validation as Array<{instancePath?:string;params?:{missingProperty?:string}}>;
+      const candidate=validation[0]?.params?.missingProperty ?? validation[0]?.instancePath?.split('/').pop();
+      const field=candidate && ['name','username','email','password'].includes(candidate)?candidate:undefined;
+      return reply.code(400).send({error:{code:'INVALID_INPUT',message:'Check the supplied fields.',...(field?{field}:{})}});
+    }
     if(failure.code==='23505') {
       const username=failure.constraint==='profiles_username_unique';
       return reply.code(409).send({error:{code:username?'USERNAME_TAKEN':'EMAIL_TAKEN',message:username?'That username is already in use.':'An account with this email already exists.'}});

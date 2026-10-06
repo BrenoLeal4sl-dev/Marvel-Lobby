@@ -6,14 +6,15 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.map
 
 private val Context.store by preferencesDataStore("marvel_preferences")
-data class AppPreferences(val onboarded: Boolean=false, val session: String="", val appearance: String="dark", val language: String="en")
+data class AppPreferences(val onboarded: Boolean=false, val session: String="", val appearance: String="dark", val language: String="pt",val languageChosen:Boolean=false)
 class PreferencesStore(private val context: Context) {
     private val onboarding = booleanPreferencesKey("onboarded")
     private val session = stringPreferencesKey("session")
     private val appearance = stringPreferencesKey("appearance")
     private val language = stringPreferencesKey("language")
     val flow = context.store.data.map {
-        AppPreferences(it[onboarding] ?: false, it[session] ?: "", it[appearance] ?: "dark", it[language] ?: "en")
+        AppPreferences(it[onboarding] ?: false, it[session] ?: "", it[appearance] ?: "dark",
+            it[language] ?: if(java.util.Locale.getDefault().language=="en")"en" else "pt",it[language]!=null)
     }
     suspend fun finishOnboarding() { context.store.edit { it[onboarding] = true } }
     suspend fun session(email: String) { context.store.edit { it[session] = email; it[onboarding] = true } }

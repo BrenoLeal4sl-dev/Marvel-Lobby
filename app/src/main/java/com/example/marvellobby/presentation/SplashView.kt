@@ -9,7 +9,8 @@ import android.widget.LinearLayout
 /** Animations belong to the visible view and stop as soon as it leaves the screen. */
 class SplashView(ui: UiKit) : LinearLayout(ui.context) {
     private val logo = ui.brandLogo(164)
-    private val loading = ui.text("Carregando.",14,ui.palette.muted).apply {
+    private val loadingLabel=ui.translate("Loading")
+    private val loading = ui.text("$loadingLabel.",14,ui.palette.muted).apply {
         gravity = Gravity.CENTER
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -20,7 +21,7 @@ class SplashView(ui: UiKit) : LinearLayout(ui.context) {
         orientation = VERTICAL
         gravity = Gravity.CENTER
         setPadding(ui.dp(32),0,ui.dp(32),0)
-        contentDescription = "Marvel Lobby, carregando"
+        contentDescription = "Marvel Lobby, $loadingLabel"
         addView(logo)
         ui.add(this,loading,24)
     }
@@ -28,7 +29,7 @@ class SplashView(ui: UiKit) : LinearLayout(ui.context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (!ValueAnimator.areAnimatorsEnabled()) {
-            loading.text = "Carregando..."
+            loading.text = "$loadingLabel..."
             return
         }
         pulse = ObjectAnimator.ofFloat(logo,ALPHA,1f,0.45f).apply {
@@ -44,7 +45,7 @@ class SplashView(ui: UiKit) : LinearLayout(ui.context) {
             interpolator = android.view.animation.LinearInterpolator()
             addUpdateListener {
                 val count = (it.animatedValue as Float).toInt().coerceAtMost(2) + 1
-                loading.text = "Carregando" + ".".repeat(count)
+                loading.text = loadingLabel + ".".repeat(count)
             }
             start()
         }

@@ -13,7 +13,7 @@ function profile(row: Row): PublicProfile {
 }
 function validateProfile(input: ProfileInput): ProfileInput {
   const name = input.name.trim(), username = normalizeUsername(input.username), bio = input.bio.trim();
-  if(name.length < 2 || name.length > 80) invalid('Enter a name with 2–80 characters.');
+  if(name.length < 2 || name.length > 80) invalid('Enter a name with 2–80 characters.','name');
   if(Array.from(bio).length > 280) invalid('Keep your bio within 280 characters.');
   if(input.avatarId !== null && !AVATARS.includes(input.avatarId)) invalid('Choose an approved Marvel avatar.');
   return { name, username, bio, avatarId: input.avatarId };

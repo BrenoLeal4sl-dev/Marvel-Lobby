@@ -6,7 +6,7 @@ import java.io.IOException
 import java.time.Instant
 import java.util.UUID
 
-class LobbyApiException(val code: String,val status: Int,message: String): IOException(message)
+class LobbyApiException(val code: String,val status: Int,message: String,val field:String?=null): IOException(message)
 data class SessionSecrets(val origin: String,val userId: String,val accessToken: String,val refreshToken: String,val accessExpiresAt: Long)
 data class LobbySession(val user: UserProfile,val secrets: SessionSecrets)
 
@@ -26,7 +26,9 @@ object LobbyProtocol {
         return LobbySession(user,SessionSecrets(origin,user.id!!,access,refresh,Instant.parse(json.getString("accessExpiresAt")).toEpochMilli()))
     }
     fun failure(status: Int,body: String): LobbyApiException {
-        val code=runCatching { JSONObject(body).getJSONObject("error").getString("code") }.getOrDefault("SERVICE_UNAVAILABLE")
+        val data=runCatching { JSONObject(body).getJSONObject("error") }.getOrNull()
+        val code=data?.optString("code")?.takeIf { it.isNotBlank() } ?: "SERVICE_UNAVAILABLE"
+        val field=data?.optString("field")?.takeIf { code=="INVALID_INPUT" && it in setOf("name","username","email","password") }
         // Fixed messages; never display arbitrary server/proxy HTML or private connection details.
         val message=when(code) {
             "USERNAME_TAKEN" -> "That username is already in use."
@@ -34,7 +36,13 @@ object LobbyProtocol {
             "INVALID_CREDENTIALS" -> "Email or password is incorrect."
             "CURRENT_PASSWORD_INCORRECT" -> "Current password is incorrect."
             "SESSION_EXPIRED" -> "Sign in again to continue."
-            "INVALID_INPUT" -> "Check your input."
+            "INVALID_INPUT" -> when(field) {
+                "name" -> com.example.marvellobby.data.model.AuthValidation.NAME_MESSAGE
+                "username" -> com.example.marvellobby.data.model.AuthValidation.USERNAME_HINT
+                "email" -> com.example.marvellobby.data.model.AuthValidation.EMAIL_MESSAGE
+                "password" -> com.example.marvellobby.data.model.PasswordRules.MESSAGE
+                else -> "Check your input."
+            }
             "USER_NOT_FOUND" -> "This profile is unavailable."
             "RATE_LIMITED" -> "Too many attempts. Please try again later."
             "COMMUNITY_NOT_READY" -> "Community is being updated. Please try again shortly."
@@ -43,6 +51,6 @@ object LobbyProtocol {
             "MESSAGE_CONFLICT" -> "This message could not be resent. Check the conversation before sending it again."
             else -> "The online service is unavailable. Please try again."
         }
-        return LobbyApiException(code,status,message)
+        return LobbyApiException(code,status,message,field)
     }
 }

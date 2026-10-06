@@ -1,5 +1,7 @@
 # API do Marvel Lobby — identidade e comunidade
 
+Erros `INVALID_INPUT` de autenticação podem incluir `error.field` (`name`, `username`, `email` ou `password`) para indicar o campo recusado. O cliente valida antes de enviar e associa a mensagem ao campo. Respostas nunca incluem valores enviados, senhas ou detalhes internos; login incorreto continua sem revelar a existência da conta. A política de senha permanece 8–128 caracteres, uma letra e um número, com maiúsculas/símbolos opcionais.
+
 Este serviço é a ponte HTTPS entre o Android e o PostgreSQL da Aiven. O celular nunca recebe usuário/senha do PostgreSQL. Inclui cadastro, login, sessões, perfil público, bio, seguir/seguidores, mensagens privadas e favoritos publicados por escolha do usuário. Solicitações de amizade, push e sincronização completa da biblioteca entre dispositivos não fazem parte deste escopo. O catálogo Comic Vine, o chat Gemini e a tradução Groq continuam separados.
 
 ## Bio e favoritos públicos

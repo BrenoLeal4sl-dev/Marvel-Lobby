@@ -8,6 +8,8 @@ import com.example.marvellobby.MarvelApplication
 import com.example.marvellobby.data.api.ComicVineException
 import com.example.marvellobby.data.model.*
 import com.example.marvellobby.data.repository.*
+import com.example.marvellobby.data.remote.LobbyApiException
+import com.example.marvellobby.presentation.auth.StartupDestination
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -30,6 +32,8 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     private var owner=""
     private val sessionLock=Mutex()
     private var resumeAfterSignIn: Pair<String,Route>?=null
+    private var pendingStartupRestore:Pair<Route?,List<Route>>?=null
+    val authTouched=mutableSetOf<String>()
     val onlineAvailable get()=app.onlineAccounts.available
     val drafts=mutableMapOf<String,String>()
     val scrollPositions=mutableMapOf<String,Int>()
@@ -47,16 +51,12 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
                     refreshChats()
                     delay(3_000)
                     val restored=saved.get<String>("route")?.let { runCatching { gson.fromJson(it,Route::class.java) }.getOrNull() }
-                    val route=when {
-                        !prefs.onboarded -> Route("welcome")
-                        user==null -> Route("login")
-                        restored?.screen !in listOf(null,"splash","login","register","welcome") -> restored!!
-                        else -> Route("home")
-                    }
+                    val route=StartupDestination.resolve(prefs,user!=null,restored)
+                    val history=saved.get<String>("backStack")?.let {
+                        runCatching { gson.fromJson(it,Array<Route>::class.java).toList() }.getOrNull()
+                    }.orEmpty()
+                    if(route.screen=="language")pendingStartupRestore=restored to history
                     if(user!=null && route==restored) {
-                        val history=saved.get<String>("backStack")?.let {
-                            runCatching { gson.fromJson(it,Array<Route>::class.java).toList() }.getOrNull()
-                        }.orEmpty()
                         showRoute(navigator.restore(route,history))
                     } else navigate(route,replace=true)
                     if(route.screen=="ai")saved.get<String>("chatId")?.let { openConversation(it,false) }
@@ -74,7 +74,8 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
         showRoute(navigator.navigate(destination,replace,replaceCurrent))
     }
     private fun showRoute(route: Route) {
-        mutable.update { it.copy(route=route,formError=null,
+        if(state.value.route.screen!=route.screen)authTouched.clear()
+        mutable.update { it.copy(route=route,formError=null,authErrors=emptyMap(),
             visibleSecrets=if(it.route.key==route.key)it.visibleSecrets else emptySet(),
             securityUnlocked=it.route.key==route.key && it.securityUnlocked) }
         saved["route"]=gson.toJson(route)
@@ -95,7 +96,8 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     }
     fun tab(screen: String) = navigate(Route(screen),replace=true)
     fun back(): Boolean {
-        if(state.value.route.screen=="splash") return true
+        if(state.value.route.screen=="splash")return true
+        if(state.value.route.screen=="language")return false
         when(state.value.route.screen) {
             "editBio" -> drafts.remove("bio:text")
             "editProfile","connectAccount" -> { drafts.keys.filter { it.startsWith("profile:") || it.startsWith("connect:") }.toList().forEach(drafts::remove) }
@@ -108,6 +110,34 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     fun onboarding(register: Boolean) {
         viewModelScope.launch { app.preferences.finishOnboarding(); navigate(Route(if(register) "register" else "login"),replace=true) }
     }
+    fun chooseInitialLanguage(value:String) {
+        if(state.value.authBusy || value !in listOf("pt","en"))return
+        mutable.update { it.copy(authBusy=true,formError=null) }
+        viewModelScope.launch {
+            try {
+                app.preferences.language(value)
+                val prefs=app.preferences.flow.first()
+                val user=app.accounts.profile(prefs.session)
+                val pending=pendingStartupRestore
+                val target=StartupDestination.resolve(prefs,user!=null,pending?.first)
+                mutable.update { it.copy(preferences=prefs,user=user,authBusy=false) }
+                pendingStartupRestore=null
+                if(user!=null && pending!=null && target==pending.first)showRoute(navigator.restore(target,pending.second))
+                else navigate(target,replace=true)
+                if(target.screen=="ai")saved.get<String>("chatId")?.let { openConversation(it,false) }
+            } catch(cancelled:CancellationException) { throw cancelled }
+            catch(e:Exception) { mutable.update { it.copy(authBusy=false,formError=error(e)) } }
+        }
+    }
+    fun authFieldEdited(key:String,value:String) {
+        drafts["auth:$key"]=value
+        val affected=if(key=="password")setOf("password","confirm") else setOf(key)
+        if(state.value.formError!=null || state.value.authErrors.keys.any { it in affected })
+            mutable.update { it.copy(formError=null,authErrors=it.authErrors-affected) }
+    }
+    fun toggleAuthPassword(key:String) {
+        mutable.update { it.copy(visibleSecrets=if(key in it.visibleSecrets)it.visibleSecrets-key else it.visibleSecrets+key) }
+    }
     fun reauthenticate() {
         if(state.value.authBusy)return
         val user=state.value.user?.takeIf { it.online } ?: return
@@ -119,7 +149,12 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     }
     fun authenticate(register: Boolean,name: String,email: String,password: String,confirmation: String,online: Boolean=false,username: String="") {
         if(state.value.authBusy) return
-        mutable.update { it.copy(authBusy=true,formError=null) }
+        val invalid=AuthValidation.validate(register,online,name,email,password,confirmation,username)
+        if(invalid.isNotEmpty()) {
+            authTouched.addAll(invalid.keys)
+            mutable.update { it.copy(authErrors=invalid,formError=invalid.values.first()) };return
+        }
+        mutable.update { it.copy(authBusy=true,formError=null,authErrors=emptyMap()) }
         jobs["auth"]=viewModelScope.launch {
             try {
                 if(register)require(password==confirmation) { "Passwords do not match." }
@@ -140,7 +175,12 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
                 resumeAfterSignIn=null
                 refreshLibrary(); refreshChats();navigate(destination,replace=true)
             } catch(cancelled: CancellationException) { throw cancelled }
-            catch(e: Exception) { mutable.update { it.copy(authBusy=false,formError=error(e)) } }
+            catch(e: Exception) {
+                val message=error(e)
+                val field=(e as? LobbyApiException)?.field ?: AuthValidation.fieldForMessage(message)
+                field?.let(authTouched::add)
+                mutable.update { it.copy(authBusy=false,formError=message,authErrors=if(field==null)emptyMap() else mapOf(field to message)) }
+            }
         }
     }
     fun guest() { if(state.value.authBusy)return;viewModelScope.launch {
@@ -200,7 +240,7 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     fun appearance(value: String) { viewModelScope.launch { app.preferences.appearance(value) } }
     fun language(value: String) { viewModelScope.launch {
         app.preferences.language(value)
-        mutable.update { it.copy(preferences=it.preferences.copy(language=value)) }
+        mutable.update { it.copy(preferences=it.preferences.copy(language=value,languageChosen=true)) }
         state.value.details[state.value.route.key]?.entity?.let(::prepareDescription)
     } }
     fun unlockSecurity() { mutable.update { it.copy(securityUnlocked=true) } }

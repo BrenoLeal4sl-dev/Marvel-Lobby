@@ -39,7 +39,7 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
     }
     suspend fun register(name: String,email: String,password: String,username: String,bio: String="",avatar: String="")=withContext(Dispatchers.IO) {
         mutex.withLock {
-            val body=JSONObject().put("name",name).put("email",email).put("password",password).put("username",username)
+            val body=JSONObject().put("name",name.trim()).put("email",email.trim()).put("password",password).put("username",com.example.marvellobby.data.model.Usernames.normalize(username))
                 .put("bio",bio).put("avatarId",avatarId(avatar) ?: JSONObject.NULL)
             withContext(NonCancellable) { persist(api.request("POST","/v1/auth/register",body)) }
         }

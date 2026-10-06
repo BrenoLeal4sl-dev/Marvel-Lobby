@@ -3,6 +3,7 @@ package com.example.marvellobby.data.repository
 import android.util.Patterns
 import com.example.marvellobby.data.local.*
 import com.example.marvellobby.data.model.Usernames
+import com.example.marvellobby.data.model.PasswordRules
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -17,7 +18,7 @@ class AccountRepository(private val dao: ArchiveDao, private val preferences: Pr
         require(name.trim().length in 2..80) { "Enter a name with 2–80 characters." }
         val normalized=email.trim().lowercase(Locale.ROOT)
         require(Patterns.EMAIL_ADDRESS.matcher(normalized).matches()) { "Enter a valid email address." }
-        require(password.length in 8..128 && password.any(Char::isLetter) && password.any(Char::isDigit)) { "Use 8–128 characters, including a letter and a number." }
+        require(PasswordRules.valid(password)) { PasswordRules.MESSAGE }
         require(password == confirm) { "Passwords do not match." }
         require(dao.account(normalized)==null) { "An account with this email already exists on this device." }
         val account=LocalAccount().apply {
@@ -77,7 +78,7 @@ class AccountRepository(private val dao: ArchiveDao, private val preferences: Pr
         }
         if(normalized!=email)require(dao.account(normalized)==null) { "An account with this email already exists on this device." }
         if(newPassword.isNotEmpty()) {
-            require(newPassword.length in 8..128 && newPassword.any(Char::isLetter) && newPassword.any(Char::isDigit)) { "Use 8–128 characters, including a letter and a number." }
+            require(PasswordRules.valid(newPassword)) { PasswordRules.MESSAGE }
             require(newPassword==confirm) { "Passwords do not match." }
             account.salt=PasswordHasher.salt();account.passwordHash=PasswordHasher.hash(newPassword,account.salt)
         }

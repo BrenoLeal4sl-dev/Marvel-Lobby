@@ -10,6 +10,28 @@ let db:TestDatabase;
 let app:Awaited<ReturnType<typeof createApp>>;
 let counter=0,requestCounter=0;
 const password='Password2026';
+test('invalid signup fields return actionable metadata before persisting an account',async()=>{
+  const valid={name:'Hero',username:'validation_hero',email:'validation@example.invalid',password};
+  const cases:[Record<string,unknown>,string][]=[
+    [{...valid,username:'breno.leal'},'username'],
+    [{...valid,username:'breno leal'},'username'],
+    [{...valid,email:'not-an-email'},'email'],
+    [{...valid,password:'abcdefgh'},'password'],
+    [{...valid,password:'short1'},'password'],
+    [{...valid,password:42},'password'],
+    [{...valid,name:'x'},'name'],
+    [{username:valid.username,email:valid.email,password},'name']
+  ];
+  for(const [payload,field] of cases) {
+    const response=await request('POST','/v1/auth/register',payload);
+    assert.equal(response.statusCode,400,response.body);
+    assert.equal(response.json().error.code,'INVALID_INPUT');assert.equal(response.json().error.field,field);
+    assert.ok(!response.body.includes(String(payload.password)));
+  }
+  assert.equal((await db.engine.query('SELECT id FROM marvel_lobby.users WHERE email=$1',[valid.email])).rows.length,0);
+  const extra=await request('POST','/v1/auth/register',{...valid,unexpected:'private-value'});
+  assert.equal(extra.statusCode,400);assert.equal(extra.json().error.field,undefined);assert.ok(!extra.body.includes('private-value'));
+});
 before(async()=>{db=await TestDatabase.create();await checkDatabase(db);app=await createApp(db);});
 after(async()=>{await app?.close();await db?.close();});
 async function request(method:'GET'|'POST'|'PATCH',url:string,payload?:unknown,token?:string,remoteAddress?:string) {

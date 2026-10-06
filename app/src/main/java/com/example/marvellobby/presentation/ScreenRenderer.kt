@@ -49,6 +49,7 @@ class ScreenRenderer(val activity: MainActivity,val vm: MainViewModel,val state:
     }
     fun render(): LinearLayout {
         when(state.route.screen) {
+            "language" -> chooseLanguage()
             "welcome" -> welcome()
             "login","register" -> auth()
             "home" -> home()

@@ -148,7 +148,7 @@ class MainActivity : AppCompatActivity() {
                 root.addView(renderer.directComposer(),LinearLayout.LayoutParams(-1,-2))
                 scroll?.setOnScrollChangeListener { _: View, _: Int, _: Int, _: Int, _: Int -> readDirectWhenVisible(state) }
             }
-            if(state.route.screen !in listOf("welcome","login","register","filters","ai","directChat")) {
+            if(state.route.screen !in listOf("language","welcome","login","register","filters","ai","directChat")) {
                 val style="$isLight:${state.preferences.language}"
                 if(navigationBar==null || style!=navigationStyle) {
                     navigationBar?.stopAnimations()
@@ -256,7 +256,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun header(state: AppState,ui: UiKit): View {
         val row=ui.row().apply { setPadding(ui.dp(20),ui.dp(10),ui.dp(20),ui.dp(10)) }
-        if(state.route.screen=="home") {
+        if(state.route.screen=="language") {
+            row.addView(ui.brandLogo(48).apply { scaleType=ImageView.ScaleType.FIT_START },LinearLayout.LayoutParams(ui.dp(140),-1))
+        } else if(state.route.screen=="home") {
             val brand=FrameLayout(this)
             brand.addView(ui.brandLogo(48).apply { scaleType=ImageView.ScaleType.FIT_START;translationX=-ui.dp(12).toFloat() },FrameLayout.LayoutParams(ui.dp(120),-1,Gravity.START or Gravity.CENTER_VERTICAL))
             row.addView(brand,LinearLayout.LayoutParams(0,-1,1f))

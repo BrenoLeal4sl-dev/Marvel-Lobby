@@ -21,7 +21,7 @@ class AppNavigator {
             current = history.removeAt(history.lastIndex)
             return current
         }
-        if (current.screen in setOf("home", "welcome", "login")) return null
+        if (current.screen in setOf("home", "language", "welcome", "login")) return null
         return navigate(Route(if (authenticated) "home" else "login"), clearHistory=true)
     }
 

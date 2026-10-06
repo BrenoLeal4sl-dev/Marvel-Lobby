@@ -26,7 +26,7 @@ data class AppState(
     val user: UserProfile?=null, val library: List<LibraryItem> = emptyList(),
     val pages: Map<String,BrowseState> = emptyMap(), val details: Map<String,DetailState> = emptyMap(),
     val home: BrowseState=BrowseState(), val ai: AiState=AiState(), val authBusy: Boolean=false,
-    val formError: String?=null, val favoriteTab: ResourceType=ResourceType.CHARACTER,
+    val formError: String?=null,val authErrors:Map<String,String> = emptyMap(),val favoriteTab: ResourceType=ResourceType.CHARACTER,
     val searchType: ResourceType?=null, val recentSearches: List<String> = emptyList(),
     val comparisonCharacter: ComicEntity?=null,
     val relatedIssues: Map<String,RelatedIssuesState> = emptyMap(),

@@ -2,6 +2,16 @@
 
 Atualizado em 06/10/2026.
 
+## Cadastro, login e idioma inicial — 06/10/2026
+
+- Primeiro acesso apresenta uma escolha bilíngue Português / English após a splash, antes de Welcome ou autenticação. A escolha fica no DataStore; selecionar idioma não conclui o onboarding. Usuários que já escolheram um idioma continuam com a preferência atual. Sessão e destino anterior são preservados ao selecionar idioma numa instalação antiga.
+- Welcome, cadastro e login oferecem troca de idioma. O cadastro explica nome de 2–80 caracteres, @usuário de 3–24 letras ASCII/números/underscore sem pontos, espaços ou acentos, e senha de 8–128 caracteres com uma letra e um número. Maiúsculas e símbolos continuam opcionais, conforme a política existente da API.
+- Checklist da senha atualiza enquanto a pessoa digita. Campos obrigatórios, e-mail, username e confirmação exibem erros junto do campo após sair dele ou enviar o formulário. Corrigir um campo remove seu erro sem apagar os demais valores. Mostrar/ocultar senha preserva o texto e volta a ocultá-lo ao deixar o app.
+- Login valida campos obrigatórios/formato, sem aplicar a composição de senha nova a credenciais antigas. Duplicidade é associada ao campo correspondente; credenciais incorretas continuam com mensagem geral, sem revelar se um e-mail está cadastrado.
+- API inclui `error.field` opcional para campos conhecidos de autenticação. O cliente usa mensagens fixas traduzidas; descarta texto arbitrário do servidor. Nenhuma alteração de banco ou migração é necessária.
+
+Validação: 80 testes unitários Android e 29 de backend passaram. Compilação e lint passaram (0 erros; 68 avisos existentes). Dois testes nativos passaram: metadados de erro sem texto arbitrário, e primeiro acesso bilíngue → Português → Welcome → cadastro inválido → erros específicos → correção e checklist → mostrar/ocultar senha → reabertura em Login com idioma salvo. Cadastro válido não foi enviado à produção. A primeira abertura do emulador apresentou ANR do System UI; após aguardar a recuperação, os testes passaram. Nenhuma instalação no celular.
+
 ## Bio e favoritos nos perfis da comunidade — 06/10/2026
 
 - Profile oferece Adicionar bio / Editar bio, com contador e limite de 280 caracteres Unicode. Salvar retorna ao perfil e permite apagar a bio. A atualização online altera somente o texto; preserva username, nome, avatar e credenciais. Bio local permanece após reabrir o app e mudar o e-mail.

@@ -19,6 +19,11 @@ import android.text.method.PasswordTransformationMethod
 import androidx.core.widget.doAfterTextChanged
 import com.example.marvellobby.R
 
+/** Updates validation and progress without replacing the focused input or its IME connection. */
+class AuthFormBinding(private val refresh:(AppState)->Unit) {
+    fun update(state:AppState)=refresh(state)
+}
+
 fun ScreenRenderer.welcome() {
      add(ui.editorial("ARCHIVE / 00","A universe of connections",190))
      languageMenu()
@@ -30,27 +35,37 @@ fun ScreenRenderer.welcome() {
  }
 fun ScreenRenderer.auth() {
      val register=state.route.screen=="register"
-     add(authHero(ui,register),0)
-     add(ui.text(if(register)"Discover stories. Find your people." else "Your favorites, stories and people, together.",12,ui.palette.muted),12)
-     val form=ui.column(16).apply {
-         background=ui.gradient(ui.palette.surface,ColorUtils.blendARGB(ui.palette.surface,ui.palette.raised,0.35f),26).apply { setStroke(ui.dp(1),ColorUtils.setAlphaComponent(ui.palette.border,160)) }
+     if(register) {
+         add(authHero(ui,true),0)
+         add(ui.text("Discover stories. Find your people.",12,ui.palette.muted),12)
+     } else {
+         content.setPadding(ui.dp(24),ui.dp(24),ui.dp(24),ui.dp(24))
+         add(ui.text("YOUR MARVEL UNIVERSE",10,ui.palette.secondary,true).apply { letterSpacing=0.12f },0)
+         add(ui.text("Welcome back",30,bold=true),12)
+         add(ui.text("Sign in to continue your story.",14,ui.palette.muted),12)
+     }
+     val form=ui.column(if(register)16 else 0).apply {
+         if(register)background=ui.gradient(ui.palette.surface,ColorUtils.blendARGB(ui.palette.surface,ui.palette.raised,0.35f),26).apply { setStroke(ui.dp(1),ColorUtils.setAlphaComponent(ui.palette.border,160)) }
          tag="auth:form"
      }
-     ui.add(form,ui.text(if(register)"Create account" else "Sign in",20,bold=true),0)
+     if(register)ui.add(form,ui.text("Create account",20,bold=true),0)
      val fields=linkedMapOf<String,EditText>()
      val frames=linkedMapOf<String,LinearLayout>()
      val errors=linkedMapOf<String,TextView>()
      val checks=mutableListOf<Pair<(String)->Boolean,TextView>>()
+     val eyeButtons=linkedMapOf<String,View>()
      fun validation()=AuthValidation.validate(register,true,vm.drafts["auth:name"].orEmpty(),vm.drafts["auth:email"].orEmpty(),vm.drafts["auth:password"].orEmpty(),vm.drafts["auth:confirm"].orEmpty(),vm.drafts["auth:username"].orEmpty())
      fun updateHints() {
          val current=validation()
          fields.forEach { (key,input) ->
              val message=vm.state.value.authErrors[key] ?: current[key].takeIf { key in vm.authTouched }
              errors.getValue(key).apply {
-                 text=message?.let(ui.translate).orEmpty()
-                 visibility=if(message==null)View.GONE else View.VISIBLE
+                 val value=message?.let(ui.translate).orEmpty()
+                 if(text.toString()!=value)text=value
+                 val shown=if(message==null)View.GONE else View.VISIBLE
+                 if(visibility!=shown)visibility=shown
              }
-             frames.getValue(key).background=ui.shape(ColorUtils.blendARGB(ui.palette.background,ui.palette.surface,0.45f),14,true).apply {
+             frames.getValue(key).background=ui.shape(ui.palette.surface,if(register)14 else 18,true).apply {
                  setStroke(ui.dp(1),when { message!=null->ui.palette.red;input.hasFocus()->ui.palette.secondary;else->ui.palette.border })
              }
              input.contentDescription=ui.translate(when(key) { "name"->"Name";"username"->"Username";"email"->"Email";"confirm"->"Confirm password";else->"Password" })+message?.let { ": "+ui.translate(it) }.orEmpty()
@@ -67,12 +82,13 @@ fun ScreenRenderer.auth() {
      fun field(label:String,key:String,password:Boolean=false,email:Boolean=false,hint:String=""):EditText {
          val box=ui.column()
          val caption=ui.row()
-         caption.addView(ui.text(label,12,ui.palette.muted,true),LinearLayout.LayoutParams(0,-2,1f))
+         caption.addView(ui.text(label,if(register)12 else 13,ui.palette.muted,true),LinearLayout.LayoutParams(0,-2,1f))
          if(key=="name")caption.addView(ui.text("2–80 characters",10,ui.palette.muted),LinearLayout.LayoutParams(-2,-2))
          ui.add(box,caption,0)
          val input=ui.field(label,vm.drafts["auth:$key"].orEmpty(),hint,password,email,"auth:$key").apply {
              isEnabled=!state.authBusy
-             background=null;minimumHeight=ui.dp(52);setPadding(0,ui.dp(10),ui.dp(4),ui.dp(10))
+             textSize=if(register)14f else 16f
+             background=null;minimumHeight=ui.dp(56);setPadding(0,ui.dp(10),ui.dp(4),ui.dp(10))
              imeOptions=if(key=="confirm" || (!register && key=="password"))EditorInfo.IME_ACTION_DONE else EditorInfo.IME_ACTION_NEXT
              if(key=="username")inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
              if(key=="name")inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
@@ -82,23 +98,30 @@ fun ScreenRenderer.auth() {
              }
          }
          val row=ui.row().apply { setPadding(ui.dp(14),0,ui.dp(4),0);tag="auth:$key:container" }
+         row.setOnClickListener {
+             if(input.isEnabled) {
+                 input.requestFocus()
+                 (activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(input,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+             }
+         }
+         row.isFocusable=false
          val prefix=if(key=="username")ui.text("@",18,ui.palette.muted,true).apply { gravity=Gravity.CENTER;importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO }
              else ImageView(activity).apply {
                  setImageResource(when { password->R.drawable.ic_auth_lock;email->R.drawable.ic_auth_mail;else->R.drawable.ic_auth_user })
                  imageTintList=ColorStateList.valueOf(ui.palette.muted);importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO
              }
          row.addView(prefix,LinearLayout.LayoutParams(ui.dp(20),ui.dp(20)).apply { marginEnd=ui.dp(12) })
-         row.addView(input,LinearLayout.LayoutParams(0,ui.dp(52),1f))
+         row.addView(input,LinearLayout.LayoutParams(0,ui.dp(56),1f))
          if(password)row.addView(ui.actionIcon(if("auth:$key" in state.visibleSecrets)R.drawable.ic_eye else R.drawable.ic_eye_closed,if("auth:$key" in state.visibleSecrets)"Hide password" else "Show password") {
              vm.toggleAuthPassword("auth:$key")
-         }.apply { isEnabled=!state.authBusy;tag="auth:$key:visibility";background=ui.shape(Color.TRANSPARENT,12) },LinearLayout.LayoutParams(ui.dp(44),ui.dp(44)))
-         ui.add(box,row,6)
+         }.apply { isEnabled=!state.authBusy;tag="auth:$key:visibility";background=ui.shape(Color.TRANSPARENT,12);eyeButtons[key]=this },LinearLayout.LayoutParams(ui.dp(48),ui.dp(48)))
+         ui.add(box,row,8)
          val error=ui.text("",12,ui.palette.red).apply { tag="auth:$key:error";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE }
          ui.add(box,error,6)
          fields[key]=input;frames[key]=row;errors[key]=error
          input.doAfterTextChanged { vm.authFieldEdited(key,it.toString());updateHints() }
          input.onFocusChangeListener=View.OnFocusChangeListener { _,hasFocus -> if(!hasFocus)vm.authTouched.add(key);updateHints() }
-         ui.add(form,box,14)
+         ui.add(form,box,if(register)14 else 20)
          return input
      }
      if(register) {
@@ -106,7 +129,7 @@ fun ScreenRenderer.auth() {
          field("Username","username",hint="your_username")
          ui.add(form,ui.text(AuthValidation.USERNAME_HINT,11,ui.palette.muted),6)
      }
-     field("Email","email",email=true)
+     field("Email","email",email=true,hint="you@example.com")
      field("Password","password",password=true)
      if(register) {
          val requirements=ui.column()
@@ -121,28 +144,76 @@ fun ScreenRenderer.auth() {
          field("Confirm password","confirm",password=true)
      }
      updateHints()
-     state.formError?.let { ui.add(form,ui.text(it,12,ui.palette.red).apply { tag="auth:summary";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE },12) }
-     if(state.authBusy)ui.add(form,ui.loading(if(register)"Creating account…" else "Signing in…"),12)
+     val summary=ui.text("",12,ui.palette.red).apply { tag="auth:summary";visibility=View.GONE;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE }
+     ui.add(form,summary,12)
      if(!vm.onlineAvailable)ui.add(form,ui.text("The online service is not configured yet.",12,ui.palette.red),12)
      fun submit() {
-         activity.hideKeyboard()
          vm.authenticate(register,vm.drafts["auth:name"].orEmpty(),vm.drafts["auth:email"].orEmpty(),vm.drafts["auth:password"].orEmpty(),vm.drafts["auth:confirm"].orEmpty(),vm.drafts["auth:username"].orEmpty())
+         if(vm.state.value.authErrors.isNotEmpty())fields[vm.state.value.authErrors.keys.first()]?.let { input ->
+             input.requestFocus()
+             input.post { input.requestRectangleOnScreen(android.graphics.Rect(0,0,input.width,input.height+ui.dp(20)),false) }
+         } else activity.hideKeyboard()
      }
-     fields.getValue(if(register)"confirm" else "password").setOnEditorActionListener { _,action,_ -> if(action==EditorInfo.IME_ACTION_DONE) { submit();true } else false }
-     ui.add(form,ui.button(if(register)"Create account" else "Sign in") { submit() }.apply { isEnabled=!state.authBusy && vm.onlineAvailable;tag="auth:submit";alpha=if(isEnabled)1f else 0.55f },16,52)
-     add(form,20)
+     fields.values.toList().forEachIndexed { index,input ->
+         input.setOnEditorActionListener { _,action,_ ->
+             when(action) {
+                 EditorInfo.IME_ACTION_NEXT -> {
+                     fields.values.elementAtOrNull(index+1)?.let { next ->
+                         next.requestFocus()
+                         (activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(next,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                     }
+                     true
+                 }
+                 EditorInfo.IME_ACTION_DONE -> { submit();true }
+                 else -> false
+             }
+         }
+     }
+     val submitButton=ui.button(if(register)"Create account" else "Sign in") { submit() }.apply { tag="auth:submit" }
+     ui.add(form,submitButton,if(register)16 else 28,56)
+     add(form,if(register)20 else 28)
      val prompt=ui.translate(if(register)"Already have an account?" else "New to Marvel Lobby?")
      val action=ui.translate(if(register)"Sign in" else "Create account")
-     add(ui.text("",12).apply {
+     val switch=ui.text("",14).apply {
          text=SpannableString("$prompt  $action").apply {
              setSpan(ForegroundColorSpan(ui.palette.secondary),length-action.length,length,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
              setSpan(StyleSpan(android.graphics.Typeface.BOLD),length-action.length,length,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
          }
          gravity=Gravity.CENTER;minimumHeight=ui.dp(48);isEnabled=!state.authBusy;isClickable=true;isFocusable=true;tag="auth:switch"
          setOnClickListener { vm.navigate(Route(if(register)"login" else "register"),replaceCurrent=true) }
-     },8)
-     add(ui.text("Continue as guest",12,ui.palette.muted).apply {
+     }
+     add(switch,12)
+     val guest=ui.text("Continue as guest",13,ui.palette.muted).apply {
          gravity=Gravity.CENTER;minimumHeight=ui.dp(44);isEnabled=!state.authBusy;isClickable=true;isFocusable=true;setOnClickListener { vm.guest() }
-     },0)
+     }
+     add(guest,0)
+     authForm=AuthFormBinding { current ->
+         updateHints()
+         fields.forEach { (key,input) ->
+             input.isEnabled=!current.authBusy
+             if(key in eyeButtons) {
+                 val visible="auth:$key" in current.visibleSecrets
+                 val desired=if(visible)null else PasswordTransformationMethod.getInstance()
+                 if(input.transformationMethod!==desired) {
+                     val start=input.selectionStart;val end=input.selectionEnd
+                     input.transformationMethod=desired
+                     if(start>=0 && end>=0)input.setSelection(start.coerceAtMost(input.length()),end.coerceAtMost(input.length()))
+                 }
+                 eyeButtons.getValue(key).apply {
+                     isEnabled=!current.authBusy
+                     contentDescription=ui.translate(if(visible)"Hide password" else "Show password")
+                     ((this as android.view.ViewGroup).getChildAt(0) as ImageView).setImageResource(if(visible)R.drawable.ic_eye else R.drawable.ic_eye_closed)
+                 }
+             }
+         }
+         val message=current.formError?.takeUnless { it in current.authErrors.values }
+         summary.text=message?.let(ui.translate).orEmpty();summary.visibility=if(message==null)View.GONE else View.VISIBLE
+         submitButton.apply {
+             text=ui.translate(if(current.authBusy) { if(register)"Creating account…" else "Signing in…" } else if(register)"Create account" else "Sign in")
+             contentDescription=text;isEnabled=!current.authBusy && vm.onlineAvailable;alpha=if(isEnabled)1f else 0.55f
+         }
+         switch.isEnabled=!current.authBusy;guest.isEnabled=!current.authBusy
+         activity.window.decorView.findViewWithTag<View>("auth:language")?.isEnabled=!current.authBusy
+     }.also { it.update(state) }
  }
 

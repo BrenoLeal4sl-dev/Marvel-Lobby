@@ -2,6 +2,15 @@
 
 Atualizado em 06/10/2026.
 
+## Correção da interação e simplificação do login — 06/10/2026
+
+- Login substitui o banner e o cartão de formulário aninhado por título direto, campos maiores, exemplo de e-mail e botão Entrar destacado. Mantidos logo, vermelho, Plus Jakarta Sans e idiomas. O cadastro conserva sua composição visual.
+- Formulário de autenticação permanece montado nas atualizações de validação, loading, visibilidade da senha e eventos da comunidade. Erros e progresso atualizam os controles existentes, sem recriar EditText, perder conexão com o teclado ou reposicionar o cursor.
+- Toda a área contornada do campo, inclusive o ícone, permite focar e abrir o teclado. Próximo percorre os campos na ordem; mostrar/ocultar senha preserva foco, texto e seleção. Erros de validação direcionam ao primeiro campo a corrigir, sem repetir a mesma mensagem no resumo.
+- Insets do teclado solicitam a visibilidade do campo focado dentro da rolagem. Estado de envio bloqueia ações duplicadas e apresenta progresso no botão sem acrescentar um bloco que desloca o formulário.
+
+Validação: compilação e 80 testes unitários Android passaram; lint sem erros (68 avisos existentes). Três testes nativos passaram. O teste novo usa toques e eventos de digitação, em vez de apenas `performClick`/`setText`, e verifica abertura do teclado pelo ícone, correção de erros sem recriar inputs, Próximo, texto/cursor preservados ao revelar/ocultar senha, atualização sem perder foco, rolagem com IME aberto, troca login/cadastro e digitação no modo claro. A execução exigiu recuperar o emulador após ANRs dos serviços do Android e aguardar o fim da inércia da rolagem antes de tocar no link. Capturas do app confirmam o layout escuro e claro. Nenhuma credencial válida foi enviada à produção; sem instalação no celular ou alterações de banco/backend.
+
 ## Redesign da entrada e autenticação online — 06/10/2026
 
 - Login e cadastro passam a autenticar exclusivamente na API online. Removido o seletor de conta local e o fallback local do ViewModel, incluindo rascunhos antigos que selecionavam esse modo. Registros já existentes permanecem no armazenamento para preservar a biblioteca e a possibilidade de vinculação de uma conta antiga.

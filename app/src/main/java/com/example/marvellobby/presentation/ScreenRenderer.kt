@@ -14,6 +14,8 @@ import com.example.marvellobby.MainActivity
 import com.example.marvellobby.data.model.*
 
 class ScreenRenderer(val activity: MainActivity,val vm: MainViewModel,val state: AppState,val ui: UiKit) {
+    var authForm: AuthFormBinding?=null
+        internal set
     val content=ui.column().apply { setPadding(ui.dp(20),ui.dp(8),ui.dp(20),ui.dp(32)) }
     fun add(view: View,gap: Int=20,height: Int=-2)=ui.add(content,view,gap,height)
     fun carousel(items: List<ComicEntity>,key: String,width: Int=260,height: Int=330) {

@@ -4,6 +4,9 @@ object Translations {
     private val portuguese=mapOf(
         "Your next chapter\nstarts here." to "Sua história\ncomeça aqui.",
         "Enter your\nMarvel universe." to "Entre no seu\nuniverso Marvel.",
+        "YOUR MARVEL UNIVERSE" to "SEU UNIVERSO MARVEL",
+        "Sign in to continue your story." to "Entre para continuar sua história.",
+        "you@example.com" to "voce@exemplo.com",
         "Discover stories. Find your people." to "Descubra histórias. Encontre sua turma.",
         "Your favorites, stories and people, together." to "Seus favoritos, histórias e amigos, juntos.",
         "your_username" to "seu_usuario",

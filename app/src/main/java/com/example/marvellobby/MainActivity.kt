@@ -17,6 +17,7 @@ import androidx.lifecycle.*
 import com.example.marvellobby.presentation.*
 import com.example.marvellobby.presentation.social.*
 import com.example.marvellobby.presentation.auth.authLanguageButton
+import com.example.marvellobby.presentation.auth.AuthFormBinding
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -38,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private var credentialSignal: android.os.CancellationSignal?=null
     private var retainedChatRoot: LinearLayout?=null
     private var retainedChatStyle=""
+    private var retainedAuthForm: AuthFormBinding?=null
+    private var retainedAuthStyle=""
     private var avatarDialog: androidx.appcompat.app.AlertDialog?=null
     private lateinit var screenHost: ScreenTransitionHost
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +99,12 @@ class MainActivity : AppCompatActivity() {
     private fun render(state: AppState) {
         community.route(state.route)
         val style="${state.preferences.language}:${state.preferences.appearance}"
+        val isAuth=state.route.screen in listOf("login","register")
+        if(isAuth && renderedRoute==state.route.key && retainedAuthForm!=null && retainedAuthStyle==style) {
+            retainedAuthForm!!.update(state)
+            return
+        }
+        retainedAuthForm=null
         if(state.route.screen=="directChat" && renderedRoute==state.route.key && retainedDirectRoot!=null && directStyle==style) { updateDirectChat(state);return }
         if(state.route.screen!="directChat")retainedDirectRoot=null
         val chatStyle=state.preferences.language
@@ -126,6 +135,13 @@ class MainActivity : AppCompatActivity() {
             val bars=insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val ime=insets.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,ime.bottom))
+            if(isAuth && ime.bottom>0) {
+                v.post {
+                    if(renderedRoute==state.route.key) (currentFocus as? EditText)?.let { input ->
+                        input.requestRectangleOnScreen(android.graphics.Rect(0,0,input.width,input.height+ui.dp(20)),false)
+                    }
+                }
+            }
             if(state.route.screen !in listOf("ai","directChat"))navigationBar?.visibility=if(ime.bottom>0)View.GONE else View.VISIBLE
             insets
         }
@@ -137,8 +153,10 @@ class MainActivity : AppCompatActivity() {
             val renderer=ScreenRenderer(this,vm,state,ui)
             scroll=ScrollView(this).apply {
                 isFillViewport=true;isVerticalScrollBarEnabled=false
+                tag="screen:scroll"
                 addView(renderer.render())
             }
+            if(isAuth) { retainedAuthForm=renderer.authForm;retainedAuthStyle=style }
             val stage=FrameLayout(this)
             stage.addView(scroll,FrameLayout.LayoutParams(-1,-1))
             root.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
@@ -308,6 +326,7 @@ class MainActivity : AppCompatActivity() {
         screenHost.dispose()
         retainedChatRoot=null
         retainedDirectRoot=null
+        retainedAuthForm=null
         credentialSignal?.cancel()
         scroll?.let { vm.scrollPositions[renderedRoute]=it.scrollY }
         navigationBar?.stopAnimations()

@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.map
 private val Context.store by preferencesDataStore("marvel_preferences")
 data class AppPreferences(val onboarded: Boolean=false, val session: String="", val appearance: String="dark", val language: String="pt",val languageChosen:Boolean=false)
 class PreferencesStore(private val context: Context) {
+    fun riftTutorial(owner: String)=context.store.data.map { it[booleanPreferencesKey("rift_tutorial_"+owner)] ?: false }
+    suspend fun finishRiftTutorial(owner: String) { context.store.edit { it[booleanPreferencesKey("rift_tutorial_"+owner)]=true } }
     private val onboarding = booleanPreferencesKey("onboarded")
     private val session = stringPreferencesKey("session")
     private val appearance = stringPreferencesKey("appearance")

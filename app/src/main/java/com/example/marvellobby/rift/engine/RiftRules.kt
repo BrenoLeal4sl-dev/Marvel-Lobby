@@ -7,9 +7,9 @@ enum class AnimationState { IDLE, RUN, ATTACK, DASH, HIT, DEATH, SPECIAL }
 enum class EnemyKind { MELEE, RANGED, TANK, FAST, BOSS }
 enum class Rarity { COMMON, RARE, EPIC, LEGENDARY }
 enum class Upgrade(val rarity: Rarity,val cap: Int,val title: String,val description: String) {
-    DAMAGE(Rarity.COMMON,4,"Web Shot","+25% web damage / +25% dano de teia"),
+    DAMAGE(Rarity.COMMON,4,"Web Shot","+25% web and melee damage / +25% dano de teia e golpes"),
     SPEED(Rarity.COMMON,3,"Spider Sense","+12% movement / +12% movimento"),
-    ATTACK_SPEED(Rarity.RARE,3,"Quick Hands","Faster shots / Disparos mais rápidos"),
+    ATTACK_SPEED(Rarity.RARE,3,"Quick Hands","Faster web recharge / Recarga de teia mais rápida"),
     HEALTH(Rarity.COMMON,3,"Second Wind","+25 health and heal / +25 vida e cura"),
     ARMOR(Rarity.RARE,3,"Resilient","Reduce incoming damage / Reduz o dano recebido"),
     DASH(Rarity.RARE,3,"Air Step","Shorter dash cooldown / Menor intervalo da esquiva"),
@@ -17,12 +17,19 @@ enum class Upgrade(val rarity: Rarity,val cap: Int,val title: String,val descrip
     PIERCE(Rarity.EPIC,2,"Thread the Needle","Webs pierce another target / Teias atravessam outro alvo"),
     RICOCHET(Rarity.EPIC,1,"Ricochet Web","One web branches to a nearby enemy / Uma teia salta para outro inimigo"),
     EXPLOSION(Rarity.LEGENDARY,1,"Web Explosion","Final hit blasts nearby enemies / Último impacto explode em área"),
-    SLOW(Rarity.RARE,1,"Sticky Web","Web shots slow targets / Teias desaceleram os alvos"),
+    SLOW(Rarity.RARE,1,"Sticky Web","Longer web slow / Teias prendem por mais tempo"),
     SPECIAL(Rarity.EPIC,3,"Web Storm","Wider burst, shorter cooldown / Explosão maior, menor intervalo")
+}
+fun Upgrade.displayName(language: String)=if(language!="pt")title else when(this) {
+    Upgrade.DAMAGE->"Teia potente";Upgrade.SPEED->"Sentido aranha";Upgrade.ATTACK_SPEED->"Mãos rápidas"
+    Upgrade.HEALTH->"Novo fôlego";Upgrade.ARMOR->"Resistência";Upgrade.DASH->"Passo aéreo"
+    Upgrade.CRITICAL->"Momento perfeito";Upgrade.PIERCE->"Teia perfurante";Upgrade.RICOCHET->"Teia ricochete"
+    Upgrade.EXPLOSION->"Explosão de teia";Upgrade.SLOW->"Teia pegajosa";Upgrade.SPECIAL->"Tempestade de teia"
 }
 
 data class CharacterDefinition(val key: String,val catalogId: Int,val name: String,val speed: Float,val health: Float,
-    val webDamage: Float,val shotCooldown: Float,val dashCooldown: Float,val specialCooldown: Float)
+    val webDamage: Float,val shotCooldown: Float,val dashCooldown: Float,val specialCooldown: Float,
+    val hasRanged: Boolean=true,val meleeDamage: Float=34f,val meleeReach: Float=85f,val webRecharge: Float=1.8f)
 object RiftCharacters {
     val spider=CharacterDefinition("spider-man",1443,"Spider-Man",210f,100f,23f,0.3f,2.8f,12f)
     val all=listOf(spider)
@@ -30,7 +37,7 @@ object RiftCharacters {
 }
 data class Obstacle(val x: Float,val y: Float,val w: Float,val h: Float)
 object RiftRules {
-    const val VERSION="rift-1"
+    const val VERSION="rift-2"
     const val STEP=1f/60f
     const val WORLD=1800f
     const val LIMIT_SECONDS=600f
@@ -60,12 +67,13 @@ class Projectile {
     var pierce=0;var branch=false;var lastHit=-1
 }
 class XpOrb { var alive=false;var x=0f;var y=0f;var value=0 }
+class HitEffect {var life=0f;var x=0f;var y=0f;var damage=0;var web=false}
 data class RunResult(val seed: Int,val character: String,val duration: Float,val kills: Int,val elites: Int,
     val bosses: Int,val damage: Float,val maxCombo: Int,val level: Int,val score: Int,val extracted: Boolean,
     val upgrades: Map<String,Int>,val version: String=RiftRules.VERSION)
 
 /** Mutable pools are owned exclusively by the game thread (Android's UI thread in this slice). */
-class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters.spider) {
+class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters.spider,val tutorial: Boolean=false) {
     var phase=RunPhase.PLAYING;private set
     var x=900f;private set;var y=900f;private set
     var facingX=0f;private set;var facingY=-1f;private set
@@ -76,16 +84,62 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
     var dashCooldown=0f;private set;var specialCooldown=0f;private set
     var dashLeft=0f;private set;var hurt=0f;private set;var shake=0f;private set
     var specialFlash=0f;private set;var attackFlash=0f;private set;var bossBanner=0f;private set
+    var explosionFlash=0f;private set;var explosionX=0f;private set;var explosionY=0f;private set
     var choices: List<Upgrade> = emptyList();private set
     val upgrades=IntArray(Upgrade.entries.size)
     val enemies=Array(RiftRules.MAX_ENEMIES) { Enemy() }
     val projectiles=Array(RiftRules.MAX_PROJECTILES) { Projectile() }
     val orbs=Array(128) { XpOrb() }
+    val effects=Array(48){HitEffect()}
+    var levelUpLeft=0f;private set
+    private var choosingLevel=false
     private val spawnRandom=RiftRandom(seed);private val combatRandom=RiftRandom(seed xor 0x546A17)
     private val upgradeRandom=RiftRandom(seed xor 0x733CA9)
     private var spawnTimer=1f;private var serial=0;private var bossCount=0;private var attackCooldown=0f;private var dying=0f
     var moveX=0f;var moveY=0f;var attacking=false
+    var aimX=0f;private set;var aimY=-1f;private set;var aiming=false;private set
+    var webCharges=3;private set;var recharge=0f;private set
+    var meleeCooldown=0f;private set;var meleeFlash=0f;private set;var meleeCombo=0;private set
+    private var meleeChain=0f
+    var wave=1;private set;var transition=if(tutorial)0f else 1.5f;private set
+    private var nextWaveAt=30f
+    var transitionKind="start";private set;private var pendingBoss=false
+    var tutorialStep=0;private set;private var tutorialMoved=0f
+    var feedback="";private set;var feedbackLeft=0f;private set
+    val rechargeDuration get()=character.webRecharge*0.82f.pow(rank(Upgrade.ATTACK_SPEED))
+    fun aim(dx: Float,dy: Float) { val length=sqrt(dx*dx+dy*dy);aiming=length>0.12f;if(aiming){aimX=dx/length;aimY=dy/length} }
+    fun releaseWeb(): Boolean {
+        val valid=aiming;aiming=false
+        if(!valid||!character.hasRanged||phase!=RunPhase.PLAYING||levelUpLeft>0||transition>0||webCharges<=0||attackCooldown>0||projectiles.none{!it.alive})return false
+        shoot(aimX,aimY);webCharges--;if(tutorial&&tutorialStep==1)tutorialStep=2;return true
+    }
+    fun melee(): Boolean {
+        if(phase!=RunPhase.PLAYING||levelUpLeft>0||transition>0||meleeCooldown>0)return false
+        meleeCombo=if(meleeChain>0)meleeCombo%3+1 else 1;meleeChain=1.1f
+        meleeCooldown=if(meleeCombo==3)0.48f else 0.28f;meleeFlash=0.22f;attackFlash=0.22f
+        val fx=if(aiming)aimX else facingX;val fy=if(aiming)aimY else facingY
+        enemies.forEach { e->if(e.alive) {
+            val dx=e.x-x;val dy=e.y-y;val length=max(1f,sqrt(dx*dx+dy*dy))
+            if(length<character.meleeReach+e.radius && (dx*fx+dy*fy)/length> -0.15f) {
+                hit(e,character.meleeDamage*(if(meleeCombo==3)1.65f else 1f)*(1f+rank(Upgrade.DAMAGE)*0.25f))
+                val nx=e.x+dx/length*22f;val ny=e.y+dy/length*22f
+                if(!blocked(nx,ny,e.radius)){e.x=nx.coerceIn(e.radius,RiftRules.WORLD-e.radius);e.y=ny.coerceIn(e.radius,RiftRules.WORLD-e.radius)}
+                shake=0.08f
+            }
+        } }
+        if(tutorial&&tutorialStep==2)tutorialStep=3
+        return true
+    }
+    fun tutorialNext() { if(tutorial&&tutorialStep in 4..5)tutorialStep++ }
+    val aimRange: Float get() {
+        var distance=24f
+        while(distance<620f){val px=x+aimX*distance;val py=y+aimY*distance
+            if(px !in 0f..RiftRules.WORLD||py !in 0f..RiftRules.WORLD||blocked(px,py,4f))return distance
+            distance+=8f
+        };return 620f
+    }
     val xpGoal get()=12+(level-1)*8
+    val deathProgress get()=(dying/.8f).coerceIn(0f,1f)
     val score get()=RiftRules.score(time,kills,elites,bosses,damage,maxCombo)
     val dashDuration get()=character.dashCooldown*0.8f.pow(rank(Upgrade.DASH))
     val specialDuration get()=character.specialCooldown*0.85f.pow(rank(Upgrade.SPECIAL))
@@ -95,35 +149,55 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
     fun rank(u: Upgrade)=upgrades[u.ordinal]
     fun pause() { if(phase==RunPhase.PLAYING)phase=RunPhase.PAUSED;clearInput() }
     fun resume() { if(phase==RunPhase.PAUSED)phase=RunPhase.PLAYING }
-    fun clearInput() { moveX=0f;moveY=0f;attacking=false }
+    fun clearInput() { moveX=0f;moveY=0f;attacking=false;aiming=false }
     fun dash(): Boolean {
-        if(phase!=RunPhase.PLAYING||dashCooldown>0)return false
+        if(phase!=RunPhase.PLAYING||transition>0||dashCooldown>0)return false
         val length=sqrt(moveX*moveX+moveY*moveY)
         if(length>0.1f) { facingX=moveX/length;facingY=moveY/length }
         dashLeft=0.18f;dashCooldown=dashDuration;return true
     }
     fun special(): Boolean {
-        if(phase!=RunPhase.PLAYING||specialCooldown>0)return false
+        if(phase!=RunPhase.PLAYING||transition>0||specialCooldown>0)return false
         specialCooldown=specialDuration;specialFlash=0.5f;shake=0.25f
         val radius=220f+rank(Upgrade.SPECIAL)*35f
-        enemies.forEach { if(it.alive && distance2(x,y,it.x,it.y)<radius*radius) { hit(it,70f+rank(Upgrade.SPECIAL)*20f);it.slow=3f } }
+        enemies.forEach { if(it.alive && distance2(x,y,it.x,it.y)<radius*radius) { hit(it,70f+rank(Upgrade.SPECIAL)*20f);it.slow=max(it.slow,3f) } }
+        if(tutorial&&tutorialStep==3)tutorialStep=4
         return true
     }
     fun choose(upgrade: Upgrade): Boolean {
         if(phase!=RunPhase.UPGRADE||upgrade !in choices||rank(upgrade)>=upgrade.cap)return false
         upgrades[upgrade.ordinal]++
         if(upgrade==Upgrade.HEALTH) { maxHp+=25f;hp=min(maxHp,hp+40f) }
+        feedback=upgrade.name;feedbackLeft=1.4f;transition=0.8f;transitionKind="upgrade"
         choices=emptyList();phase=RunPhase.PLAYING;levelCheck();return true
     }
     fun step() {
         val dt=RiftRules.STEP
+        effects.forEach {if(it.life>0)it.life=max(0f,it.life-dt)}
         if(phase==RunPhase.DYING) { dying+=dt;if(dying>=0.8f)phase=RunPhase.FINISHED;return }
         if(phase!=RunPhase.PLAYING)return
+        if(choosingLevel) {
+            // A short slowdown bridges combat and the paused choice screen; gameplay time stays frozen.
+            levelUpLeft=max(0f,levelUpLeft-dt)
+            enemies.forEach {if(it.alive)it.flash=max(0f,it.flash-dt)}
+            projectiles.forEach {if(it.alive)updateProjectile(it,dt*.12f)}
+            clearInput()
+            if(levelUpLeft==0f){choosingLevel=false;phase=RunPhase.UPGRADE}
+            return
+        }
+        if(transition>0) {
+            transition=max(0f,transition-dt);clearInput()
+            if(transition==0f&&pendingBoss) { spawnEnemy(EnemyKind.BOSS,1300f,500f);bossCount++;pendingBoss=false;bossBanner=0f }
+            return
+        }
         tick++;time=tick*dt
         if(time>=RiftRules.LIMIT_SECONDS) { phase=RunPhase.FINISHED;clearInput();return }
         dashCooldown=max(0f,dashCooldown-dt);specialCooldown=max(0f,specialCooldown-dt)
         attackCooldown=max(0f,attackCooldown-dt);hurt=max(0f,hurt-dt);shake=max(0f,shake-dt)
         attackFlash=max(0f,attackFlash-dt);specialFlash=max(0f,specialFlash-dt);bossBanner=max(0f,bossBanner-dt)
+        explosionFlash=max(0f,explosionFlash-dt)
+        meleeCooldown=max(0f,meleeCooldown-dt);meleeFlash=max(0f,meleeFlash-dt);meleeChain=max(0f,meleeChain-dt);feedbackLeft=max(0f,feedbackLeft-dt)
+        if(webCharges<3) { recharge+=dt;if(recharge>=rechargeDuration){webCharges++;recharge=0f} }
         comboTimer-=dt;if(comboTimer<=0)combo=0
         val length=sqrt(moveX*moveX+moveY*moveY)
         val mx=moveX/max(1f,length);val my=moveY/max(1f,length)
@@ -131,11 +205,18 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
         val speed=character.speed*(1f+rank(Upgrade.SPEED)*0.12f)
         if(dashLeft>0) { movePlayer(facingX*speed*3.8f*dt,facingY*speed*3.8f*dt);dashLeft=max(0f,dashLeft-dt) }
         else movePlayer(mx*speed*dt,my*speed*dt)
-        if(attacking && attackCooldown<=0)shoot()
+        if(tutorial) {
+            if(tutorialStep==0) { tutorialMoved+=sqrt(mx*mx+my*my)*speed*dt;if(tutorialMoved>65f)tutorialStep=1 }
+            projectiles.forEach { if(it.alive)updateProjectile(it,dt) };return
+        }
+        if(time>=nextWaveAt && enemies.none { it.alive&&it.kind==EnemyKind.BOSS }) {
+            wave++;nextWaveAt=time+30f;transition=2.4f;transitionKind="wave";enemies.forEach { it.alive=false };projectiles.forEach { it.alive=false };clearInput();return
+        }
         spawnTimer-=dt
         if(spawnTimer<=0) { spawnScheduled();spawnTimer=max(0.24f,1.55f-time/145f) }
         if(time>=(bossCount+1)*90f && bossCount<5 && enemies.none { it.alive&&it.kind==EnemyKind.BOSS }) {
-            if(spawnEnemy(EnemyKind.BOSS,1300f,500f,false)!=null) { bossCount++;bossBanner=3f;shake=0.3f }
+            pendingBoss=true;transition=2.4f;transitionKind="boss";bossBanner=2.4f
+            enemies.forEach { it.alive=false };projectiles.forEach { it.alive=false };clearInput();return
         }
         enemies.forEach { if(it.alive)updateEnemy(it,dt) }
         projectiles.forEach { if(it.alive)updateProjectile(it,dt) }
@@ -159,7 +240,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
             while(roll>=weights[i]) { roll-=weights[i];i++ }
             picked.add(candidates.removeAt(i))
         }
-        if(picked.isNotEmpty()) { choices=picked;phase=RunPhase.UPGRADE;clearInput();shake=0.2f }
+        if(picked.isNotEmpty()) { choices=picked;choosingLevel=true;levelUpLeft=.65f;clearInput();shake=0.2f }
     }
     private fun movePlayer(dx: Float,dy: Float) {
         val nx=(x+dx).coerceIn(20f,RiftRules.WORLD-20f);if(!blocked(nx,y,17f))x=nx
@@ -198,10 +279,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
         enemy.attack=1f;enemy.slow=0f;enemy.flash=0f;enemy.windup=0f;enemy.pattern=0;enemy.aimX=0f;enemy.aimY=0f
         return enemy
     }
-    private fun shoot() {
-        val target=enemies.filter { it.alive && distance2(x,y,it.x,it.y)<600f*600f }.minByOrNull { distance2(x,y,it.x,it.y) }
-        var dx=target?.let { it.x-x } ?: facingX;var dy=target?.let { it.y-y } ?: facingY
-        val length=max(0.001f,sqrt(dx*dx+dy*dy));dx/=length;dy/=length
+    private fun shoot(dx: Float,dy: Float) {
         val dmg=character.webDamage*(1f+rank(Upgrade.DAMAGE)*0.25f)*(if(combatRandom.unit()<rank(Upgrade.CRITICAL)*0.12f)2f else 1f)
         projectile(x+dx*21,y+dy*21,dx*620f,dy*620f,true,dmg,rank(Upgrade.PIERCE),rank(Upgrade.RICOCHET)>0)
         attackCooldown=character.shotCooldown*0.82f.pow(rank(Upgrade.ATTACK_SPEED));attackFlash=0.15f
@@ -228,7 +306,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
                 }
             } else if(e.attack<=0) { e.windup=1.2f;e.aimX=x;e.aimY=y;movement=0f }
         }
-        val speed=e.speed*(if(e.slow>0)0.35f else 1f)*movement*dt
+        val speed=e.speed*(if(e.slow>0)0.5f else 1f)*movement*dt
         val nx=(e.x+dx/d*speed).coerceIn(e.radius,RiftRules.WORLD-e.radius)
         val ny=(e.y+dy/d*speed).coerceIn(e.radius,RiftRules.WORLD-e.radius)
         if(!blocked(nx,e.y,e.radius))e.x=nx
@@ -240,7 +318,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
         if(p.life<=0 || p.x !in 0f..RiftRules.WORLD || p.y !in 0f..RiftRules.WORLD || blocked(p.x,p.y,4f)) { p.alive=false;return }
         if(!p.friendly) { if(distance2(x,y,p.x,p.y)<22f*22f) { hurtPlayer(p.damage);p.alive=false };return }
         for(e in enemies)if(e.alive && e.serial!=p.lastHit && distance2(e.x,e.y,p.x,p.y)<(e.radius+6f).pow(2)) {
-            hit(e,p.damage);p.lastHit=e.serial;if(rank(Upgrade.SLOW)>0)e.slow=max(e.slow,1.5f)
+            hit(e,p.damage);p.lastHit=e.serial;e.slow=max(e.slow,2f+rank(Upgrade.SLOW)*1.5f)
             if(p.branch) {
                 val target=enemies.filter { it.alive && it.serial!=e.serial && distance2(e.x,e.y,it.x,it.y)<210f*210f }.minByOrNull { distance2(e.x,e.y,it.x,it.y) }
                 if(target!=null) { val dx=target.x-e.x;val dy=target.y-e.y;val d=max(0.001f,sqrt(dx*dx+dy*dy));projectile(e.x+dx/d*(e.radius+8f),e.y+dy/d*(e.radius+8f),dx/d*620f,dy/d*620f,true,p.damage*0.7f) }
@@ -248,7 +326,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
             }
             if(p.pierce>0)p.pierce-- else {
                 p.alive=false
-                if(rank(Upgrade.EXPLOSION)>0) { enemies.forEach { if(it.alive && distance2(e.x,e.y,it.x,it.y)<90f*90f)hit(it,p.damage*0.6f) };shake=0.08f }
+                if(rank(Upgrade.EXPLOSION)>0) { enemies.forEach { if(it.alive && distance2(e.x,e.y,it.x,it.y)<90f*90f){hit(it,p.damage*0.6f);it.slow=max(it.slow,2f+rank(Upgrade.SLOW)*1.5f)} };explosionX=e.x;explosionY=e.y;explosionFlash=.35f;shake=0.08f }
                 break
             }
         }
@@ -259,6 +337,7 @@ class RiftEngine(val seed: Int,val character: CharacterDefinition=RiftCharacters
     }
     private fun hit(e: Enemy,value: Float) {
         if(!e.alive)return
+        effects.firstOrNull {it.life<=0}?.let {it.life=.55f;it.x=e.x;it.y=e.y;it.damage=value.toInt();it.web=meleeFlash<=0}
         damage+=min(e.hp,value);e.hp-=value;e.flash=0.12f
         if(e.hp>0)return
         e.alive=false;kills++;if(e.elite)elites++;if(e.kind==EnemyKind.BOSS)bosses++

@@ -12,7 +12,7 @@ Rendering uses Choreographer at display cadence with 60 Hz simulation, capped ca
 
 Spider-Man: directional movement, aimed web shot (nearest target or last direction), invulnerable dash, radial Web Burst. One arena with obstacles, four enemy archetypes, elites and a boss with telegraphed attacks. Upgrades combine projectile piercing, branching, blast, slowing, defensive and mobility effects. Three choices pause play. Runs end on death or extraction at ten minutes.
 
-Sprites are explicitly provisional, code-native silhouettes. Animation states idle/run/attack/dash/hit/death/special are independent of simulation. No Comic Vine thumbnails are presented as sprites; replacement sheets can be loaded before combat through the renderer's asset boundary. No sound/music claimed in this slice.
+Sprites are explicitly provisional, code-native silhouettes. Animation states idle/run/attack/dash/hit/death/special are independent of simulation. No Comic Vine thumbnails are presented as sprites; replacement sheets can be loaded before combat through the renderer's asset boundary. The polish adds a short generated level-up tone and haptics; there is no recorded soundtrack.
 
 Competitive phase: authenticated server-issued session/seed/version, offline play during a session, durable submission queue, server-recomputed score, bounded duration/events and idempotent submission. Offline practice cannot enter verified rankings. Global/following/weekly/character rankings use pagination and include own rank. Async challenges reuse a seed and version; no real-time multiplayer. Result cards open the Arena and reference server records. Public achievements require activity consent.
 
@@ -29,6 +29,20 @@ Challenges have one issued attempt per participant. Explicitly abandoning consum
 Only new personal records and the first boss defeat publish an activity, and only while activity sharing is enabled. Opting out removes previous Arena activities too. Routine runs do not enter the feed. Notifications remain in-app, as in the existing community.
 
 ## Assets and tuning
+
+## Control and clarity polish — 2026-10-07
+
+Ruleset `rift-2` keeps the same engine, world, pools, progression and social integration. It replaces hold-to-autoaim with independent left movement / right aim sticks: drag to preview a web trajectory (stopped by scenery), release to fire, center/cancel to discard. Three charges recharge sequentially in 1.8 seconds each; Quick Hands reduces this interval. Every web hit slows movement by 50% for two seconds. Sticky Web extends duration; explosions also refresh it. Effects refresh to the longest remaining duration and never multiply or sum penalties.
+
+Spider-Man's melee chain uses 34 / 34 / 56.1 base damage, short cooldowns, an 85-unit reach, forward arc and small knockback. It spends no web charge and has greater close-range damage potential. Character definitions expose ranged availability, melee damage/reach and recharge parameters; a future melee-only hero is not required to invent a projectile. Only Spider-Man is currently playable.
+
+A per-account DataStore flag records tutorial completion. The action-gated tutorial uses an isolated local engine without enemies, competitive session or saved result. It teaches movement, release-to-fire, melee and special, then XP and the objective. Completion starts the requested normal/practice/challenge run. Arena Settings offers a repeat; replay returns to the menu. Player LV and wave are separate. Waves end after 30 active seconds without a living boss; remaining enemies and hostile shots disperse without granting kills/XP. A brief clock-frozen transition introduces the next wave; boss warnings also freeze the action. Level-up uses a short visual slowdown, paused choices and an acquired-upgrade transition. Pause/background freezes these sequences too.
+
+An upright three-quarter hero silhouette keeps feet grounded; facing is indicated independently of movement, the chest spider is visible, and hit numbers/web wraps/melee arcs/directional dash trails distinguish attacks. A vector Rift identity is reused in menu, tutorial, rankings, results and chat cards. The menu includes character mastery derived from local kills (50 per mastery level), personal best, character access and the primary Play action. Mastery is informational and grants no fabricated rewards.
+
+The backend creates version-2 sessions/rankings. Version-1 issued sessions can still upload valid pending results, while old challenges remain visible with an explicit previous-ruleset notice. No database schema change is necessary; old runs are preserved. Runtime gameplay does not load remote assets.
+
+Polish validation: 95 Android unit tests, 40 backend tests, and three native emulator tests passed. Native coverage includes simultaneous movement/aim, release/cancel and charge use, background/recreation, action-gated tutorial completion and per-account persistence, tutorial replay through Settings, upgrade selection/resumption and durable result storage. Menu/tutorial/upgrade screenshots were inspected at 720×1280; Play is visible in the initial viewport. Lint reports zero errors. Physical-device feel and sustained frame rate remain a playtesting task, rather than an automated-test claim.
 
 Current visuals are provisional Canvas silhouettes, not final licensed sprite sheets. No external image loading occurs during play. The game supports idle, run, attack, dash, hit, death and special animation states; movement drives the limb cycle. One Spider-Man definition is registered. Future characters should provide an ability/visual implementation through the registry rather than branching on character names in the simulation.
 

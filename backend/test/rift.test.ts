@@ -13,7 +13,15 @@ before(async()=> {db=await TestDatabase.create();app=await createApp(db,{limit:1
  a=await register('rift_a');b=await register('rift_b');c=await register('rift_c');
 });
 after(async()=>{await app?.close();await db?.close();});
-const metrics=(seed:number):RiftResult=>({seed,character:'spider-man',version:'rift-1',duration:1,kills:0,elites:0,bosses:0,damage:0,maxCombo:0,level:1,score:10,extracted:false,upgrades:{}});
+const metrics=(seed:number):RiftResult=>({seed,character:'spider-man',version:'rift-2',duration:1,kills:0,elites:0,bosses:0,damage:0,maxCombo:0,level:1,score:10,extracted:false,upgrades:{}});
+test('previous-version pending results remain accepted but never enter the new ranking',async()=> {
+ const session=(await req('POST','/v1/rift/sessions',c,{clientId:randomUUID()})).json();
+ await db.engine.query('UPDATE marvel_lobby.arena_sessions SET game_version=$1 WHERE id=$2',['rift-1',session.id]);
+ const submitted=await req('POST',`/v1/rift/sessions/${session.id}/result`,c,{...metrics(session.seed),version:'rift-1'});
+ assert.equal(submitted.statusCode,200,submitted.body);
+ const ranking=await req('GET','/v1/rift/ranking',c);
+ assert.equal(ranking.json().own,null);assert.equal(ranking.json().items.length,0);
+});
 test('issued sessions are private and idempotent; server checks score and spawn bounds',async()=> {
  const clientId=randomUUID(),path='/v1/rift/sessions';const response=await req('POST',path,a,{clientId});assert.equal(response.statusCode,200,response.body);
  const session=response.json();assert.equal((await req('POST',path,a,{clientId})).json().id,session.id);

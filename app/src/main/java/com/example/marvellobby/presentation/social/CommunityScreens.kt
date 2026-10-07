@@ -183,7 +183,7 @@ internal fun ScreenRenderer.sharedCard(record: SharedContent): View {
 }
 internal fun ScreenRenderer.riftCard(record: RiftShare): View {
     val box=ui.column(18).apply { background=ui.gradient(0xFF641529.toInt(),0xFF18233C.toInt()) }
-    ui.add(box,ui.text("RIFT ARENA",12,0xFFFFA8A1.toInt(),true),0)
+    ui.add(box,com.example.marvellobby.rift.render.RiftIdentityView(activity),0,54)
     ui.add(box,ui.text(if(record.kind=="challenge")"Rift Challenge" else record.score?.toString().orEmpty(),28,android.graphics.Color.WHITE,true),12)
     ui.add(box,ui.text(if(record.kind=="challenge")"Open challenge" else "Beat this record",13,0xFFF0D8E0.toInt()),12)
     ui.clickable(box,0xFF311526.toInt()) { activity.openRift(challengeId=record.id.takeIf { record.kind=="challenge" }) }

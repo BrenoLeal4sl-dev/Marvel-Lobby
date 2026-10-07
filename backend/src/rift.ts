@@ -4,7 +4,7 @@ import type {Principal} from './contracts.js';
 import type {Query,Row} from './database.js';
 import {ApiError,invalid} from './errors.js';
 
-export const RIFT_VERSION='rift-1';
+export const RIFT_VERSION='rift-2';
 const caps:Record<string,number>={DAMAGE:4,SPEED:3,ATTACK_SPEED:3,HEALTH:3,ARMOR:3,DASH:3,CRITICAL:3,PIERCE:2,RICOCHET:1,EXPLOSION:1,SLOW:1,SPECIAL:3};
 export interface RiftResult {seed:number;character:string;duration:number;kills:number;elites:number;bosses:number;damage:number;maxCombo:number;level:number;score:number;extracted:boolean;upgrades:Record<string,number>;version:string}
 export function calculateScore(r:RiftResult) { return Math.floor(r.duration)*10+r.kills*40+r.elites*150+r.bosses*1200+Math.floor(Math.floor(Math.min(r.damage,200000))/5)+Math.min(r.maxCombo,200)*20; }
@@ -53,7 +53,7 @@ export class Rift {
   const session=(await q.query('SELECT *,extract(epoch FROM now()-started_at) AS wall FROM marvel_lobby.arena_sessions WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,p.userId]))[0];
   if(!session)throw new ApiError(404,'ARENA_SESSION_MISSING','This run does not belong to your account.');
   if(session.abandoned_at)throw new ApiError(409,'ARENA_CONFLICT','This session was abandoned.');
-  if(r.version!==RIFT_VERSION||r.version!==session.game_version||r.character!==session.character_key||r.seed!==session.seed)invalid('The run does not match its issued session.');
+  if(!['rift-1',RIFT_VERSION].includes(r.version)||r.version!==session.game_version||r.character!==session.character_key||r.seed!==session.seed)invalid('The run does not match its issued session.');
   this.validate(r,Number(session.wall));
   const existing=(await q.query('SELECT * FROM marvel_lobby.arena_runs WHERE session_id=$1',[id]))[0];
   if(existing) {
@@ -61,7 +61,7 @@ export class Rift {
    if(!same)throw new ApiError(409,'ARENA_CONFLICT','This session already has a different result.');return {id,score:existing.score,accepted:true};
   }
   if(new Date(session.expires_at).getTime()<Date.now())throw new ApiError(409,'ARENA_EXPIRED','This competitive session expired. Your local result is preserved.');
-  const prior=(await q.query('SELECT coalesce(max(score),0) AS best,coalesce(sum(bosses),0) AS bosses FROM marvel_lobby.arena_runs WHERE user_id=$1 AND game_version=$2',[p.userId,RIFT_VERSION]))[0]!;
+  const prior=(await q.query('SELECT coalesce(max(score),0) AS best,coalesce(sum(bosses),0) AS bosses FROM marvel_lobby.arena_runs WHERE user_id=$1 AND game_version=$2',[p.userId,r.version]))[0]!;
   await q.query(`INSERT INTO marvel_lobby.arena_runs(session_id,user_id,character_key,game_version,score,duration,kills,elites,bosses,damage,max_combo,level,extracted,upgrades)
    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[id,p.userId,r.character,r.version,calculateScore(r),r.duration,r.kills,r.elites,r.bosses,r.damage,r.maxCombo,r.level,r.extracted,JSON.stringify(r.upgrades)]);
   await q.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`favorites:${p.userId}`]);

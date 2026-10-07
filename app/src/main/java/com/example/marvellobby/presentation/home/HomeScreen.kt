@@ -10,7 +10,10 @@ fun ScreenRenderer.home() {
     title("Every power opens\nanother story.")
     searchField(editable=false,gap=24)
     menu("Community","People · Followers · Messages") { vm.navigate(Route("community")) }
-    menu("Rift Arena","Spider-Man · Action · Survival") { activity.openRift() }
+    val arena=ui.column(16).apply {background=ui.gradient(0xFF641529.toInt(),0xFF18233C.toInt())}
+    ui.add(arena,com.example.marvellobby.rift.render.RiftIdentityView(activity),0,54)
+    ui.add(arena,ui.text("Spider-Man · Action · Survival",12,android.graphics.Color.WHITE),8)
+    ui.clickable(arena,onClick={activity.openRift()});add(arena,gap=16)
     if(state.home.loading)add(ui.loading())
     state.home.error?.let { sectionError(it) { vm.loadHome() } }
     if(state.home.offline)body("Connection unavailable · showing saved records")

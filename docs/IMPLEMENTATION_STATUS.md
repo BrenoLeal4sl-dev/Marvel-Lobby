@@ -4,6 +4,8 @@ Atualizado em 07/10/2026.
 
 ## Rift Arena — 07/10/2026
 
+Polimento incremental: regras `rift-2`, twin-stick com previsão e disparo ao soltar, três cargas regenerativas, slow de 50% com refresh, melee em três golpes e tutorial persistido por usuário/repetível. Nível e onda separados, alertas de chefe, sequência de level up, melhorias localizadas, feedback de impacto e nova logo vetorial no menu, Home, tutorial, ranking, resultados e chat. Resultados antigos são preservados e não entram no ranking novo. Nenhum script adicional de banco.
+
 Primeira arena jogável com Homem-Aranha, controles simultâneos, combate local, quatro tipos de inimigos, elites, chefes, evolução e resultados. Integração com sessões verificadas, rankings paginados, desafios assíncronos, estatísticas e compartilhamento no chat. Room 7 preserva os dados anteriores e armazena resultados por conta; PostgreSQL versão 7 foi aplicado e teve permissões verificadas na Aiven. Ver `RIFT_ARENA.md` para regras, testes e limitações: sprites provisórios, ausência de áudio e validação de consistência sem replay antifraude.
 
 ## Extensões sociais e sincronização privada — 06/10/2026

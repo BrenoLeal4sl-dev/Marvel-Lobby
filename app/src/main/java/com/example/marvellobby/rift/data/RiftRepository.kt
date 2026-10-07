@@ -14,7 +14,7 @@ data class RiftSession(val id: String,val seed: Int,val character: String,val ve
 data class RiftStats(val runs: Int=0,val best: Int=0,val survival: Float=0f,val kills: Int=0,val bosses: Int=0,val globalPosition: Int?=null)
 data class RiftRank(val userId: String,val username: String,val name: String,val score: Int,val position: Int)
 data class RiftRankPage(val items: List<RiftRank>,val next: Int?,val ownPosition: Int?,val ownScore: Int?)
-data class RiftChallenge(val id: String,val challenger: String,val challenged: String,val ownScore: Int?,val peerScore: Int?,val expiresAt: String,val attempted: Boolean=false)
+data class RiftChallenge(val id: String,val challenger: String,val challenged: String,val ownScore: Int?,val peerScore: Int?,val expiresAt: String,val attempted: Boolean=false,val version: String=RiftRules.VERSION)
 data class RiftChallengePage(val items: List<RiftChallenge>,val next: Int?)
 class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccountRepository) {
     private val gson=Gson();private val mutex=Mutex()
@@ -61,7 +61,7 @@ class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccoun
         val filter=id?.let { "&id=${UUID.fromString(it)}" }.orEmpty()
         val j=accounts.riftRequest(owner,"GET","/v1/rift/challenges?offset=$offset$filter");val array=j.getJSONArray("items")
         return RiftChallengePage((0 until array.length()).map { val r=array.getJSONObject(it)
-            RiftChallenge(UUID.fromString(r.getString("id")).toString(),r.getString("challenger"),r.getString("challenged"),r.optInt("own_score").takeUnless { r.isNull("own_score") },r.optInt("peer_score").takeUnless { r.isNull("peer_score") },r.getString("expires_at"),r.optBoolean("attempted")) },j.optInt("next").takeUnless { j.isNull("next") })
+            RiftChallenge(UUID.fromString(r.getString("id")).toString(),r.getString("challenger"),r.getString("challenged"),r.optInt("own_score").takeUnless { r.isNull("own_score") },r.optInt("peer_score").takeUnless { r.isNull("peer_score") },r.getString("expires_at"),r.optBoolean("attempted"),r.optString("game_version",RiftRules.VERSION)) },j.optInt("next").takeUnless { j.isNull("next") })
     }
     suspend fun challenge(owner: String,target: String,nonce: String)=accounts.riftRequest(owner,"POST","/v1/rift/challenges",JSONObject().put("userId",UUID.fromString(target).toString()).put("clientId",nonce))
     suspend fun localStats(owner: String): RiftStats=withContext(Dispatchers.IO) {

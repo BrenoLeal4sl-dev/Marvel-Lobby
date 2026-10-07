@@ -19,9 +19,64 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlinx.coroutines.flow.first
 
 @RunWith(AndroidJUnit4::class)
 class RiftControlsTest {
+    @Test fun firstVisitTutorialPersistsAndReplayDoesNotStartCompetitiveRun() {
+        val inst=InstrumentationRegistry.getInstrumentation();val context=inst.targetContext
+        val owner="rift-tutorial-${java.util.UUID.randomUUID()}"
+        ActivityScenario.launch<RiftActivity>(Intent(context,RiftActivity::class.java).putExtra("language","pt").putExtra("owner",owner)).use {scenario->
+            fun awaitView(predicate:(List<View>)->Boolean) {
+                var ready=false;val deadline=SystemClock.uptimeMillis()+12000
+                while(!ready&&SystemClock.uptimeMillis()<deadline){scenario.onActivity{ready=predicate(all(it.window.decorView))};if(!ready)SystemClock.sleep(100)}
+                assertTrue("Arena view did not become ready",ready)
+            }
+            fun capture(name:String) {inst.waitForIdleSync();SystemClock.sleep(400);val bitmap=inst.uiAutomation.takeScreenshot();assertNotNull(bitmap)
+                File(context.filesDir,"qa/$name.png").apply{parentFile!!.mkdirs()}.outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}
+            awaitView {it.filterIsInstance<Button>().any{b->b.tag=="rift:play"&&b.isEnabled}}
+            scenario.onActivity {a->val play=all(a.window.decorView).filterIsInstance<Button>().first{it.tag=="rift:play"};val visible=android.graphics.Rect();assertTrue(play.getGlobalVisibleRect(visible));assertTrue(visible.height()>=play.height-2)}
+            capture("rift-v2-menu")
+            scenario.onActivity{a->all(a.window.decorView).filterIsInstance<Button>().first{it.tag=="rift:play"}.performClick()}
+            awaitView {it.any{v->v is RiftGameView}}
+            capture("rift-v2-tutorial")
+            scenario.onActivity {a->
+                val v=all(a.window.decorView).filterIsInstance<RiftGameView>().single();v.stopFrames();assertTrue(v.engine.tutorial)
+                val joy=rect(v,"joystick");val aim=rect(v,"attack")
+                touch(v,MotionEvent.ACTION_DOWN,listOf(joy.right to joy.centerY()));repeat(25){v.engine.step()}
+                touch(v,MotionEvent.ACTION_UP,listOf(joy.right to joy.centerY()));assertEquals(1,v.engine.tutorialStep)
+                val aimed=listOf(aim.centerX()+aim.width()*.4f to aim.centerY());touch(v,MotionEvent.ACTION_DOWN,aimed);touch(v,MotionEvent.ACTION_UP,aimed)
+                assertEquals(2,v.engine.tutorialStep)
+                val melee=rect(v,"melee");touch(v,MotionEvent.ACTION_DOWN,listOf(melee.centerX() to melee.centerY()));touch(v,MotionEvent.ACTION_UP,listOf(melee.centerX() to melee.centerY()))
+                assertEquals(3,v.engine.tutorialStep)
+                val special=rect(v,"special");touch(v,MotionEvent.ACTION_DOWN,listOf(special.centerX() to special.centerY()));touch(v,MotionEvent.ACTION_UP,listOf(special.centerX() to special.centerY()))
+                assertEquals(4,v.engine.tutorialStep)
+                val next=rect(v,"tutorialNext")
+                repeat(2){touch(v,MotionEvent.ACTION_DOWN,listOf(next.centerX() to next.centerY()));touch(v,MotionEvent.ACTION_UP,listOf(next.centerX() to next.centerY()))}
+                assertEquals(6,v.engine.tutorialStep);v.startFrames()
+            }
+            awaitView {it.any{v->v is RiftGameView&&!v.engine.tutorial}}
+            assertTrue(kotlinx.coroutines.runBlocking {com.example.marvellobby.data.local.PreferencesStore(context).riftTutorial(owner).first()})
+            scenario.onActivity {a->
+                val v=all(a.window.decorView).filterIsInstance<RiftGameView>().single();v.stopFrames();repeat(100){v.engine.step()}
+                repeat(4){i->v.engine.enemies[i].apply {alive=true;serial=i+100;kind=EnemyKind.MELEE;x=v.engine.x+10;y=v.engine.y+10;hp=48f;maxHp=48f;radius=17f}}
+                assertTrue(v.engine.special());v.engine.step();assertTrue(v.engine.levelUpLeft>0);v.startFrames()
+            }
+            awaitView {it.filterIsInstance<Button>().any{b->b.text=="Escolher"}}
+            capture("rift-v2-upgrade")
+            scenario.onActivity{a->all(a.window.decorView).filterIsInstance<Button>().first{it.text=="Escolher"}.performClick()}
+            awaitView {it.filterIsInstance<Button>().none{b->b.text=="Escolher"}}
+            scenario.onActivity {a->a.onBackPressedDispatcher.onBackPressed()}
+            awaitView {it.filterIsInstance<Button>().any{b->b.text=="Sair da partida"}}
+            scenario.onActivity {a->all(a.window.decorView).filterIsInstance<Button>().first{it.text=="Sair da partida"}.performClick()}
+            androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Sair")).perform(androidx.test.espresso.action.ViewActions.click())
+            awaitView {it.filterIsInstance<Button>().any{b->b.tag=="rift:play"&&b.isEnabled}}
+            scenario.onActivity {a->all(a.window.decorView).filterIsInstance<Button>().first{it.text=="Configurações da arena"}.performClick()}
+            awaitView {it.filterIsInstance<Button>().any{b->b.text=="Repetir tutorial"}}
+            scenario.onActivity {a->all(a.window.decorView).filterIsInstance<Button>().first{it.text=="Repetir tutorial"}.performClick()}
+            awaitView {it.any{v->v is RiftGameView&&v.engine.tutorial}}
+        }
+    }
     private fun all(root: View): List<View> = listOf(root)+if(root is ViewGroup)(0 until root.childCount).flatMap { all(root.getChildAt(it)) }else emptyList()
     private fun rect(view: RiftGameView,name: String)=RiftGameView::class.java.getDeclaredField(name).apply { isAccessible=true }.get(view) as RectF
     private fun touch(view: View,action: Int,points: List<Pair<Float,Float>>) {
@@ -34,29 +89,30 @@ class RiftControlsTest {
     @Test fun multitouchMovementAttackDashPauseRecreateAndRestart() {
         val inst=InstrumentationRegistry.getInstrumentation()
         val context=inst.targetContext
+        kotlinx.coroutines.runBlocking { com.example.marvellobby.data.local.PreferencesStore(context).finishRiftTutorial("rift-test") }
         ActivityScenario.launch<RiftActivity>(Intent(context,RiftActivity::class.java).putExtra("language","pt").putExtra("owner","rift-test")).use { scenario ->
             var ready=false;val deadline=SystemClock.uptimeMillis()+10000
             while(!ready && SystemClock.uptimeMillis()<deadline) {scenario.onActivity { a->ready=all(a.window.decorView).filterIsInstance<Button>().any { it.tag=="rift:play" && it.isEnabled } };if(!ready)SystemClock.sleep(100)}
             assertTrue("Arena lobby did not become ready",ready)
-            scenario.onActivity { a->all(a.window.decorView).filterIsInstance<Button>().first { it.text.toString()=="ENTRAR NA FENDA" }.performClick() }
+            scenario.onActivity { a->all(a.window.decorView).filterIsInstance<Button>().first { it.tag=="rift:play" }.performClick() }
             var playing=false
             while(!playing && SystemClock.uptimeMillis()<deadline) {scenario.onActivity { a->playing=all(a.window.decorView).any { it is RiftGameView } };if(!playing)SystemClock.sleep(100)}
             assertTrue(playing)
             inst.waitForIdleSync()
             var initialTick=0
             scenario.onActivity { a ->
-                val v=all(a.window.decorView).filterIsInstance<RiftGameView>().single();v.stopFrames()
+                val v=all(a.window.decorView).filterIsInstance<RiftGameView>().single();v.stopFrames();repeat(100){v.engine.step()}
                 val joy=rect(v,"joystick");val attack=rect(v,"attack")
-                val points=listOf(joy.centerX()+joy.width()*0.45f to joy.centerY(),attack.centerX() to attack.centerY())
+                val points=listOf(joy.centerX()+joy.width()*0.45f to joy.centerY(),attack.centerX()+attack.width()*.4f to attack.centerY())
                 touch(v,MotionEvent.ACTION_DOWN,points.take(1))
                 touch(v,MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),points)
-                assertTrue(v.engine.moveX>0.7f);assertTrue(v.engine.attacking)
-                val x=v.engine.x;repeat(20){v.engine.step()};assertTrue(v.engine.x>x);assertTrue(v.engine.projectiles.any { it.alive&&it.friendly })
+                assertTrue(v.engine.moveX>0.7f);assertTrue(v.engine.aiming)
+                val x=v.engine.x;repeat(20){v.engine.step()};assertTrue(v.engine.x>x);assertTrue(v.engine.projectiles.none { it.alive&&it.friendly })
                 touch(v,MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),points)
-                assertFalse(v.engine.attacking);assertTrue(v.engine.moveX>0)
+                assertFalse(v.engine.aiming);assertEquals(2,v.engine.webCharges);assertTrue(v.engine.projectiles.any {it.alive&&it.friendly&&it.vx>0});assertTrue(v.engine.moveX>0)
                 val dash=rect(v,"dash");touch(v,MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT),listOf(points[0],dash.centerX() to dash.centerY()))
                 assertTrue(v.engine.dashLeft>0);touch(v,MotionEvent.ACTION_CANCEL,points)
-                assertEquals(0f,v.engine.moveX,0f);assertFalse(v.engine.attacking)
+                assertEquals(0f,v.engine.moveX,0f);assertFalse(v.engine.aiming)
                 initialTick=v.engine.tick;v.startFrames()
             }
             SystemClock.sleep(700)

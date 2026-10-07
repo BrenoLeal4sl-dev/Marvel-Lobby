@@ -17,13 +17,27 @@ data class RiftUiState(val page: String="lobby",val busy: Boolean=false,val noti
     val challengeId: String?=null)
 class RiftViewModel(application: Application): AndroidViewModel(application) {
     private val repo=(application as MarvelApplication).rift
+    private val preferences=com.example.marvellobby.data.local.PreferencesStore(application)
+    private var tutorialComplete=false
+    private var tutorialLoaded=false
+    private var afterTutorial: Pair<Boolean,String?>?=null
     private val mutable=MutableStateFlow(RiftUiState());val state=mutable.asStateFlow()
     var engine: RiftEngine?=null;private set
     var session: RiftSession?=null;private set
     private var owner="";private var runId="";private var savedId="";private var requestId=UUID.randomUUID().toString()
     private var job: Job?=null
     val online get()=owner.startsWith("remote:")
-    fun initialize(owner: String) {if(this.owner.isNotEmpty())return;this.owner=owner;refresh()}
+    fun initialize(owner: String) {if(this.owner.isNotEmpty())return;this.owner=owner;mutable.update{it.copy(busy=true)};viewModelScope.launch {tutorialComplete=preferences.riftTutorial(owner).first();tutorialLoaded=true;if(job==null)refresh()else {val records=repo.history(owner);val stats=repo.localStats(owner);mutable.update{it.copy(records=records,stats=stats)}}} }
+    fun replayTutorial() {if(!tutorialLoaded)return;afterTutorial=null;session=null;engine=RiftEngine(1443,tutorial=true);mutable.update {it.copy(page="game",notice=null)} }
+    fun finishTutorial() {
+        if(engine?.tutorial!=true||engine?.tutorialStep!=6)return
+        engine=null
+        viewModelScope.launch {
+            preferences.finishRiftTutorial(owner);tutorialComplete=true
+            val next=afterTutorial;afterTutorial=null;mutable.update {it.copy(page="lobby",busy=false)}
+            if(next!=null)start(next.first,next.second)else refresh()
+        }
+    }
     private fun notice(error: Exception)=when {
         error is com.example.marvellobby.data.remote.LobbyApiException && error.status==401 -> "Sign in again to use competitive play."
         error is com.example.marvellobby.data.remote.LobbyApiException && error.status==409 -> "The previous competitive session is still active. Finish it or play practice."
@@ -40,7 +54,9 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
     } }
     fun page(page: String) {mutable.update { it.copy(page=page,notice=null) };when(page) {"history","lobby"->refresh();"ranking"->ranking();"challenges"->challenges()}}
     fun start(practice: Boolean=false,challengeId: String?=null) {
+        if(!tutorialLoaded)return
         if(mutable.value.busy && !practice)return
+        if(!tutorialComplete) {afterTutorial=practice to challengeId;session=null;engine=RiftEngine(1443,tutorial=true);mutable.update {it.copy(page="game",busy=false,notice=null)};return}
         job?.cancel();job=viewModelScope.launch {
             mutable.update { it.copy(busy=true,notice=null,challengeId=challengeId) }
             try {

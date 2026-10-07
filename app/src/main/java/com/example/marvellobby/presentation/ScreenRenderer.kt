@@ -74,6 +74,7 @@ class ScreenRenderer(val activity: MainActivity,val vm: MainViewModel,val state:
             "inbox" -> inbox()
             "directChat" -> directChat()
             "shareContent" -> shareContent()
+            "shareRift" -> shareRift()
             "activity" -> followingActivity()
             "notifications" -> notifications()
             "socialPrivacy" -> socialPrivacy()

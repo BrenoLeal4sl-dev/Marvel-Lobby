@@ -58,4 +58,10 @@ export async function checkDatabase(db: Database): Promise<void> {
     await db.query('SELECT cloud_sync FROM marvel_lobby.preferences LIMIT 0');
     await db.query('SELECT record_key,revision FROM marvel_lobby.private_archive LIMIT 0');
   }
+  if(versions.some(row=>row.version===7)) {
+    await db.query('SELECT id FROM marvel_lobby.arena_sessions LIMIT 0');
+    await db.query('SELECT session_id FROM marvel_lobby.arena_runs LIMIT 0');
+    await db.query('SELECT id FROM marvel_lobby.arena_challenges LIMIT 0');
+    await db.query('SELECT score FROM marvel_lobby.arena_public_runs LIMIT 0');
+  }
 }

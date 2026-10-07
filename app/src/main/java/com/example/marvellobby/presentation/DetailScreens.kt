@@ -28,6 +28,8 @@ fun ScreenRenderer.detail() {
         add(ui.issueRow(ref,state.relatedIssues[state.route.key]?.records?.get(ref.id)) { vm.open(ResourceType.ISSUE,ref) },gap=10)
     }
     if(entity.type==ResourceType.CHARACTER)characterStatistics(entity)
+    if(entity.type==ResourceType.CHARACTER && entity.id==com.example.marvellobby.rift.engine.RiftCharacters.spider.catalogId)
+        button("Play in Rift Arena") { activity.openRift() }
     else if(entity.appearanceCount>0)label("${entity.appearanceCount} / ISSUE APPEARANCES")
     catalogDescription(entity)
     button("Ask Marvel AI",false) { vm.ask(entity) }

@@ -113,6 +113,10 @@ class OnlineAccountRepository(private val dao: ArchiveDao,private val api: Lobby
         require(path=="/v1/archive" || path=="/v1/archive/settings" || path.matches(Regex("/v1/archive\\?after=[0-9]+")))
         mutex.withLock { authorized(owner,method,path,body) }
     }
+    suspend fun riftRequest(owner: String,method: String,path: String,body: JSONObject?=null)=withContext(Dispatchers.IO) {
+        require(path.startsWith("/v1/rift/") && !path.contains("..") && !path.contains('#'))
+        mutex.withLock { authorized(owner,method,path,body) }
+    }
     suspend fun realtimeCredentials(owner: String)=withContext(Dispatchers.IO) {
         mutex.withLock {
             // Also validates revocation before each reconnect; refresh stays serialized with HTTP operations.

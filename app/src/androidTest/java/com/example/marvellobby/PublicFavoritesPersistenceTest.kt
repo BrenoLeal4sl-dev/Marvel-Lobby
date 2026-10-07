@@ -41,7 +41,7 @@ class PublicFavoritesPersistenceTest {
             old.execSQL("INSERT INTO account_bindings VALUES('local@example.invalid',?)",arrayOf(owner))
             old.version=4
         }
-        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_4_5,MarvelDatabase.MIGRATION_5_6).build()
+        val db=Room.databaseBuilder(context,MarvelDatabase::class.java,name).addMigrations(MarvelDatabase.MIGRATION_4_5,MarvelDatabase.MIGRATION_5_6,MarvelDatabase.MIGRATION_6_7).build()
         try {
             assertEquals("",db.archive().account("local@example.invalid").bio)
             assertTrue(db.archive().records(owner).single().favorite)

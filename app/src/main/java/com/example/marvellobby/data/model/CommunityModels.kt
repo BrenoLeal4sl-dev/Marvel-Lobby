@@ -6,7 +6,7 @@ data class SocialProfile(val profile: UserProfile,val followers: Int,val followi
     val isFollowing: Boolean,val followsYou: Boolean,val isSelf: Boolean)
 data class PeoplePage(val items: List<UserProfile>,val next: String?)
 data class DirectMessage(val id: Long,val conversationId: String,val senderId: String,val clientId: String,
-    val text: String,val sentAt: Long,val shared: SharedContent?=null)
+    val text: String,val sentAt: Long,val shared: SharedContent?=null,val rift: RiftShare?=null)
 data class DirectConversation(val id: String,val peer: UserProfile,val unread: Int=0,val lastMessage: DirectMessage?=null)
 data class InboxPage(val items: List<DirectConversation>,val next: Int?,val unreadTotal: Int)
 data class DirectPage(val peer: UserProfile,val items: List<DirectMessage>,val hasMore: Boolean,val peerLastRead: Long)
@@ -17,7 +17,8 @@ data class PublicFavoritesPage(val items: List<PublicFavorite>,val next: Int?,va
 data class SharedContent(val type: ResourceType,val id: Int,val name: String,val imageUrl: String?) {
     companion object { fun from(entity: ComicEntity)=SharedContent(entity.type,entity.id,entity.name.take(200),entity.imageUrl) }
 }
-data class CommunityActivity(val actor: UserProfile,val content: SharedContent,val at: Long)
+data class RiftShare(val kind: String,val id: String,val score: Int?=null,val achievement: String?=null)
+data class CommunityActivity(val actor: UserProfile,val content: SharedContent,val at: Long,val rift: RiftShare?=null)
 data class ActivityPage(val items: List<CommunityActivity>,val next: Int?)
 data class CommunityNotification(val key: String,val kind: String,val actor: UserProfile,val at: Long,val read: Boolean,val conversationId: String?)
 data class NotificationPage(val items: List<CommunityNotification>,val next: Int?,val unread: Int)

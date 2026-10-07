@@ -31,9 +31,10 @@ class CommunityRepository(private val accounts: OnlineAccountRepository,private 
         val path="/v1/community/conversations/${CommunityProtocol.uuid(id)}/messages"+query("before" to before?.toString(),"after" to after?.toString())
         return CommunityProtocol.messages(accounts.communityRequest(owner,"GET",path).toString(),id,::avatar)
     }
-    suspend fun send(owner: String,id: String,text: String,clientId: String,shared: SharedContent?=null): DirectMessage {
+    suspend fun send(owner: String,id: String,text: String,clientId: String,shared: SharedContent?=null,rift: RiftShare?=null): DirectMessage {
         val body=JSONObject().put("text",text).put("clientId",CommunityProtocol.uuid(clientId))
         shared?.let { body.put("shared",JSONObject().put("type",it.type.resource).put("id",it.id).put("name",it.name).put("imageUrl",it.imageUrl ?: JSONObject.NULL)) }
+        rift?.let { body.put("rift",JSONObject().put("kind",it.kind).put("id",CommunityProtocol.uuid(it.id))) }
         return CommunityProtocol.message(accounts.communityRequest(owner,"POST","/v1/community/conversations/${CommunityProtocol.uuid(id)}/messages",body).toString())
     }
     suspend fun activity(owner: String,offset: Int=0)=CommunityProtocol.activity(accounts.communityRequest(owner,"GET","/v1/community/activity?offset=$offset").toString(),::avatar)

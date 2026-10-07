@@ -1,6 +1,10 @@
 # Marvel Lobby — implementação e validação
 
-Atualizado em 06/10/2026.
+Atualizado em 07/10/2026.
+
+## Rift Arena — 07/10/2026
+
+Primeira arena jogável com Homem-Aranha, controles simultâneos, combate local, quatro tipos de inimigos, elites, chefes, evolução e resultados. Integração com sessões verificadas, rankings paginados, desafios assíncronos, estatísticas e compartilhamento no chat. Room 7 preserva os dados anteriores e armazena resultados por conta; PostgreSQL versão 7 foi aplicado e teve permissões verificadas na Aiven. Ver `RIFT_ARENA.md` para regras, testes e limitações: sprites provisórios, ausência de áudio e validação de consistência sem replay antifraude.
 
 ## Extensões sociais e sincronização privada — 06/10/2026
 

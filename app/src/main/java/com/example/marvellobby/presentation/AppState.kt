@@ -35,5 +35,7 @@ data class AppState(
     val translatedTexts: Map<String,CatalogTextState> = emptyMap(),val descriptionPage: Map<String,Int> = emptyMap(),
     val originalDescriptions: Set<String> = emptySet(),
     val publicProfile: UserProfile?=null,val publicProfileLoading: Boolean=false,val publicProfileError: String?=null,
-    val onlineProfileNotice: String?=null
+    val onlineProfileNotice: String?=null,
+    val riftStats: Map<String,com.example.marvellobby.rift.data.RiftStats> = emptyMap(),
+    val riftErrors: Map<String,String> = emptyMap()
 )

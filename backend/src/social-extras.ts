@@ -39,6 +39,7 @@ export class SocialExtras {
    await q.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`favorites:${who.userId}`]);
    await q.query('UPDATE marvel_lobby.preferences SET share_activity=$2 WHERE user_id=$1',[who.userId,enabled]);
    if(!enabled)await q.query('DELETE FROM marvel_lobby.activity WHERE user_id=$1',[who.userId]);
+     if(!enabled && (await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=7')).length)await q.query('DELETE FROM marvel_lobby.arena_achievements WHERE user_id=$1',[who.userId]);
    const followers=await q.query('SELECT follower_id FROM marvel_lobby.follows WHERE followed_id=$1',[who.userId]);
    return followers.map(r=>r.follower_id as string);
   });
@@ -47,10 +48,13 @@ export class SocialExtras {
  feed(who:Principal,offset:number) {
   if(!Number.isInteger(offset)||offset<0||offset>100000)invalid();
   return this.run(who,async q=> {
-   const rows=await q.query(`SELECT a.*,p.*,a.user_id AS actor_id FROM marvel_lobby.activity a JOIN marvel_lobby.public_profiles p ON p.id=a.user_id
+     const arena=(await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=7')).length>0;
+     const source=arena?`(SELECT user_id,created_at,resource_type,comic_vine_id,name,image_url,NULL::jsonb AS arena,resource_type||':'||comic_vine_id AS event_key FROM marvel_lobby.activity
+      UNION ALL SELECT user_id,created_at,'character',1443,'Spider-Man',NULL,jsonb_build_object('kind','result','id',session_id,'score',score,'character','spider-man','achievement',kind),session_id::text||':'||kind FROM marvel_lobby.arena_achievements)`:'marvel_lobby.activity';
+     const rows=await q.query(`SELECT a.*,p.*,a.user_id AS actor_id FROM ${source} a JOIN marvel_lobby.public_profiles p ON p.id=a.user_id
     JOIN marvel_lobby.follows f ON f.followed_id=a.user_id AND f.follower_id=$1
-    ORDER BY a.created_at DESC,a.user_id,a.resource_type,a.comic_vine_id LIMIT 31 OFFSET $2`,[who.userId,offset]);
-   return {items:rows.slice(0,30).map(r=>({actor:person(r),content:{type:r.resource_type,id:r.comic_vine_id,name:r.name,imageUrl:r.image_url},at:iso(r.created_at)})),next:rows.length>30?offset+30:null};
+      ORDER BY a.created_at DESC,a.user_id,a.resource_type,a.comic_vine_id${arena?',a.event_key':''} LIMIT 31 OFFSET $2`,[who.userId,offset]);
+     return {items:rows.slice(0,30).map(r=>({actor:person(r),content:{type:r.resource_type,id:r.comic_vine_id,name:r.name,imageUrl:r.image_url},at:iso(r.created_at),rift:r.arena??null})),next:rows.length>30?offset+30:null};
   });
  }
  notifications(who:Principal,offset:number) {

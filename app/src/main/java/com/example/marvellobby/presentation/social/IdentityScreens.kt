@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import androidx.core.widget.doAfterTextChanged
 import com.example.marvellobby.presentation.*
+import com.example.marvellobby.rift.presentation.riftProfile
 import java.text.DateFormat
 import java.util.Date
 
@@ -85,6 +86,7 @@ fun ScreenRenderer.publicProfile() {
     if(user.bio.isNotBlank())add(ui.text(user.bio,14,ui.palette.muted).apply { text=user.bio })
     user.id?.let { publicFavorites(it) }
     if(state.user?.online==true)user.id?.let { socialStats(it) }
+    if(state.user?.online==true)riftProfile(user.id)
     label("Member since")
     add(ui.text(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(user.joinedAt)),14),gap=8)
 }

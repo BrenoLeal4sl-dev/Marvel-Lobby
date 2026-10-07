@@ -78,7 +78,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
     private fun enter() {
         if(!canRequest)return
         when(route.screen) {
-            "community","socialPeople","shareContent" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
+            "community","socialPeople","shareContent","shareRift" -> if(state.value.people[route.key]?.loading!=true)loadPeople()
             "activity" -> { loadActivity();activityPrivacy() }
             "notifications" -> loadNotifications()
             "socialPrivacy" -> activityPrivacy()
@@ -107,7 +107,7 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                             wait=2_000L;mutable.update { it.copy(connected=true,connecting=false) }
                             loadInbox();loadProfile(userId)
                             syncFavorites()
-                            if(route.screen in listOf("community","socialPeople","shareContent") && state.value.people[route.key]?.loading!=true)loadPeople()
+                            if(route.screen in listOf("community","socialPeople","shareContent","shareRift") && state.value.people[route.key]?.loading!=true)loadPeople()
                             if(route.screen=="directChat")route.userId?.let { syncChat(it) }
                         }
                         if(event.type=="messages" || event.type=="read") {
@@ -221,6 +221,10 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         mutable.update { it.copy(shareContent=SharedContent.from(entity),notice=null) }
         navigation.trySend(Route("shareContent"))
     }
+    fun prepareRift(record: RiftShare) {
+        if(!canRequest)return
+        mutable.update { it.copy(shareRift=record,notice=null) };navigation.trySend(Route("shareRift"))
+    }
     fun loadActivity(more: Boolean=false) {
         if(!canRequest||jobs["activity"]?.isActive==true)return
         val prior=state.value.activity;if(more && prior.next==null)return
@@ -300,12 +304,12 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
             catch(e: Exception) { if(owner==forOwner)mutable.update { it.copy(inbox=it.inbox.copy(loading=false,error=error(e))) } }
         }
     }
-    fun openConversation(id: String,shared: SharedContent?=null) {
+    fun openConversation(id: String,shared: SharedContent?=null,rift: RiftShare?=null) {
         if(!canRequest||state.value.opening)return
         val forOwner=owner;mutable.update { it.copy(opening=true,notice=null) }
         jobs["open"]=viewModelScope.launch {
             try { val conversation=app.community.open(forOwner,id)
-                if(owner==forOwner && shared!=null && state.value.chats[conversation.id]?.pending!=null) {
+                if(owner==forOwner && (shared!=null||rift!=null) && state.value.chats[conversation.id]?.pending!=null) {
                     mutable.update { it.copy(opening=false,notice="This conversation has a pending send. Open Messages and retry it before sharing another record.") }
                     return@launch
                 }
@@ -314,6 +318,10 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
                     if(shared!=null) {
                         chat(conversation.id) { it.copy(pending=PendingDirectMessage(shared.name,UUID.randomUUID().toString(),shared)) }
                         mutable.update { it.copy(shareContent=null) };send(conversation.id,retry=true)
+                    }
+                    if(rift!=null) {
+                        chat(conversation.id) { it.copy(pending=PendingDirectMessage("Rift Arena",UUID.randomUUID().toString(),rift=rift)) }
+                        mutable.update { it.copy(shareRift=null) };send(conversation.id,retry=true)
                     }
                 }
             } catch(cancelled: CancellationException) { throw cancelled }
@@ -364,9 +372,9 @@ class CommunityViewModel(application: Application): AndroidViewModel(application
         if(!retry && old.pending!=null)return // Resolve an ambiguous failed send before creating another nonce.
         val forOwner=owner;chat(id) { it.copy(sending=true,pending=pending,sendError=null) }
         jobs["send:$id"]=viewModelScope.launch {
-            try { val sent=app.community.send(forOwner,id,pending.text,pending.clientId,pending.shared)
+            try { val sent=app.community.send(forOwner,id,pending.text,pending.clientId,pending.shared,pending.rift)
                 if(owner==forOwner) {
-                    if(pending.shared==null && drafts[id]?.trim()==pending.text)drafts[id]=""
+                    if(pending.shared==null && pending.rift==null && drafts[id]?.trim()==pending.text)drafts[id]=""
                     chat(id) { it.acknowledge(sent) }
                     loadInbox();syncChat(id)
                 }

@@ -2,6 +2,23 @@ package com.example.marvellobby.presentation
 
 object Translations {
     private val portuguese=mapOf(
+        "Spider-Man · Action · Survival" to "Homem-Aranha · Ação · Sobrevivência",
+        "Play in Rift Arena" to "Jogar na Rift Arena",
+        "Personal best" to "Recorde",
+        "Runs" to "Partidas",
+        "Survival" to "Sobrevivência",
+        "Kills" to "Eliminações",
+        "No ranked runs yet" to "Nenhuma partida no ranking ainda",
+        "Challenge in Rift Arena" to "Desafiar na Rift Arena",
+        "Share Rift Arena" to "Compartilhar Rift Arena",
+        "Rift Challenge" to "Desafio da Rift",
+        "Open challenge" to "Abrir desafio",
+        "Beat this record" to "Bater este recorde",
+        "New Rift record" to "Novo recorde na Rift",
+        "First Rift boss defeated" to "Primeiro boss da Rift derrotado",
+        "Sign in again to use competitive play." to "Entre na sua conta para jogar no modo competitivo.",
+        "The previous competitive session is still active. Finish it or play practice." to "A sessão competitiva anterior ainda está ativa. Finalize-a ou jogue no treino.",
+        "Arena service unavailable. Your local results are kept. Try again or play practice." to "O serviço da Arena está indisponível. Seus resultados locais foram preservados. Tente novamente ou jogue no treino.",
         "This conversation has a pending send. Open Messages and retry it before sharing another record." to "Esta conversa tem um envio pendente. Abra Mensagens e tente enviá-lo novamente antes de compartilhar outro registro.",
         "Only favorites you choose to share appear on your public profile. Activities show new favorites to followers only when enabled. History and AI conversations can optionally sync privately to your account." to "Somente os favoritos que você escolher compartilhar aparecem no seu perfil público. As atividades mostram novos favoritos aos seguidores apenas quando ativadas. Histórico e conversas de IA podem ser sincronizados de forma privada e opcional na sua conta.",
         "Following connections, shared records and direct messages are stored on the Marvel Lobby server. Only participants can access a direct conversation through the app. Notifications are shown inside the app. AI conversations are separate and private." to "Conexões, registros compartilhados e mensagens privadas ficam no servidor do Marvel Lobby. Somente os participantes acessam uma conversa privada pelo aplicativo. As notificações aparecem dentro do app. As conversas de IA são separadas e privadas.",

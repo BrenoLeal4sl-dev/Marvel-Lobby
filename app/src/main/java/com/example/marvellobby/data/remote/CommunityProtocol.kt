@@ -36,7 +36,13 @@ object CommunityProtocol {
         val body=json.text("text");require(body.isNotBlank() && body.codePointCount(0,body.length)<=2000)
         return DirectMessage(json.number("id").also { require(it>0) },uuid(json.text("conversationId")),uuid(json.text("senderId")),
             uuid(json.text("clientId")),body,Instant.parse(json.text("sentAt")).toEpochMilli(),
-            json.get("shared")?.takeUnless { it.isJsonNull }?.let { shared(it.asJsonObject) })
+            json.get("shared")?.takeUnless { it.isJsonNull }?.let { shared(it.asJsonObject) },
+            json.get("rift")?.takeUnless { it.isJsonNull }?.let { rift(it.asJsonObject) })
+    }
+    private fun rift(json: JsonObject): RiftShare {
+        val kind=json.text("kind");require(kind in setOf("result","challenge"))
+        val score=json.get("score")?.takeUnless { it.isJsonNull }?.asInt;require(score==null||score>=0)
+        return RiftShare(kind,uuid(json.text("id")),score,json.get("achievement")?.takeUnless { it.isJsonNull }?.asString)
     }
     private fun shared(json: JsonObject): SharedContent {
         val type=ResourceType.entries.single { it.resource==json.text("type") }
@@ -47,7 +53,7 @@ object CommunityProtocol {
     fun activity(text: String,avatar: (Int?)->String)=safe {
         val json=parse(text)
         ActivityPage(json.getAsJsonArray("items").map { element -> val item=element.asJsonObject
-            CommunityActivity(profile(item.getAsJsonObject("actor"),avatar),shared(item.getAsJsonObject("content")),Instant.parse(item.text("at")).toEpochMilli())
+            CommunityActivity(profile(item.getAsJsonObject("actor"),avatar),shared(item.getAsJsonObject("content")),Instant.parse(item.text("at")).toEpochMilli(),item.get("rift")?.takeUnless { it.isJsonNull }?.let { rift(it.asJsonObject) })
         },json.get("next")?.takeUnless { it.isJsonNull }?.asInt)
     }
     fun notifications(text: String,avatar: (Int?)->String)=safe {

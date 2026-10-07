@@ -19,6 +19,7 @@ import com.example.marvellobby.presentation.social.*
 import com.example.marvellobby.presentation.auth.authLanguageButton
 import com.example.marvellobby.presentation.auth.AuthFormBinding
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class MainActivity : AppCompatActivity() {
     private lateinit var vm: MainViewModel
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(screenHost)
         vm=ViewModelProvider(this)[MainViewModel::class.java]
         community=ViewModelProvider(this)[CommunityViewModel::class.java]
+        handleRiftIntent(intent)
         onBackPressedDispatcher.addCallback(this,object: OnBackPressedCallback(true) {
             override fun handleOnBackPressed() { goBack() }
         })
@@ -63,6 +65,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
     fun refresh() { lastState?.let(::render) }
+    fun openRift(challengeTarget: String?=null,challengeId: String?=null) {
+        startActivity(Intent(this,com.example.marvellobby.rift.presentation.RiftActivity::class.java)
+            .putExtra("language",vm.state.value.preferences.language)
+            .putExtra("owner",vm.state.value.user?.ownerKey ?: "guest")
+            .putExtra("challengeTarget",challengeTarget).putExtra("challengeId",challengeId))
+    }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent);setIntent(intent);handleRiftIntent(intent) }
+    private fun handleRiftIntent(intent: Intent) {
+        val action=intent.getStringExtra("riftAction") ?: return
+        val target=intent.getStringExtra("riftTarget").orEmpty();intent.removeExtra("riftAction");intent.removeExtra("riftTarget")
+        lifecycleScope.launch {
+            vm.state.first { it.route.screen!="splash" }
+            when(action) {
+                "character"->target.toIntOrNull()?.takeIf { it==com.example.marvellobby.rift.engine.RiftCharacters.spider.catalogId }?.let { vm.open(com.example.marvellobby.data.model.ResourceType.CHARACTER,com.example.marvellobby.data.model.ComicReference(it,"Spider-Man")) }
+                "profile"->runCatching { java.util.UUID.fromString(target).toString() }.getOrNull()?.let { vm.navigate(Route("publicProfile",userId=it)) }
+                "shareResult","shareChallenge"->runCatching { java.util.UUID.fromString(target).toString() }.getOrNull()?.let {
+                    if(vm.state.value.user?.online==true)community.prepareRift(com.example.marvellobby.data.model.RiftShare(if(action=="shareResult")"result" else "challenge",it,intent.getIntExtra("riftScore",-1).takeIf { score->score>=0 }))
+                }
+            }
+        }
+    }
     fun pickAvatar() {
         val prefs=vm.state.value.preferences
         val light=prefs.appearance=="light" || (prefs.appearance=="system" && resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_NO)
@@ -293,7 +316,7 @@ class MainActivity : AppCompatActivity() {
                 "login","register"->"Account";"editProfile"->"Edit Profile";"editBio"->"Biography";"privacy"->"Privacy & terms"
                 "connectAccount"->"Connect online account";"publicProfile"->"Public profile"
                 "community"->"Community";"inbox"->"Messages";"directChat"->"Messages"
-                "activity"->"Following activity";"notifications"->"Notifications";"shareContent"->"Share a record";"socialPrivacy"->"Activity privacy";"cloudSync"->"Cloud synchronization"
+                "activity"->"Following activity";"notifications"->"Notifications";"shareContent"->"Share a record";"shareRift"->"Share Rift Arena";"socialPrivacy"->"Activity privacy";"cloudSync"->"Cloud synchronization"
                 "socialPeople"->if(state.route.title=="following")"Following" else "Followers"
                 "history"->"Recently Viewed";"chats"->"Conversation history";"ai"->"Marvel AI";"catalog"->when(state.route.type?.name) {
                     "CHARACTER"->"Characters";"TEAM"->"Teams";"POWER"->"Powers";else->"Story Arcs"
@@ -316,6 +339,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         community.foreground(true)
+        if(::vm.isInitialized && vm.state.value.route.screen in listOf("profile","publicProfile"))
+            vm.loadRiftStats(if(vm.state.value.route.screen=="publicProfile")vm.state.value.route.userId else vm.state.value.user?.id)
     }
     override fun onStop() {
         community.foreground(false)

@@ -1,7 +1,7 @@
 package com.example.marvellobby.data.local;
 import androidx.room.Database;
 import androidx.room.RoomDatabase;
-@Database(entities={StoredRecord.class,LocalAccount.class,StoredConversation.class,RemoteAccount.class,AccountBinding.class,PublicFavoriteChange.class,CloudRecord.class},version=6,exportSchema=false)
+@Database(entities={StoredRecord.class,LocalAccount.class,StoredConversation.class,RemoteAccount.class,AccountBinding.class,PublicFavoriteChange.class,CloudRecord.class,com.example.marvellobby.rift.data.StoredRiftRun.class},version=7,exportSchema=false)
 public abstract class MarvelDatabase extends RoomDatabase {
  public static final androidx.room.migration.Migration MIGRATION_1_2 = new androidx.room.migration.Migration(1,2) {
   @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
@@ -30,6 +30,13 @@ public abstract class MarvelDatabase extends RoomDatabase {
   }
  };
  public abstract ArchiveDao archive();
+ public abstract com.example.marvellobby.rift.data.RiftDao rift();
+ public static final androidx.room.migration.Migration MIGRATION_6_7 = new androidx.room.migration.Migration(6,7) {
+  @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
+   db.execSQL("CREATE TABLE rift_runs (id TEXT NOT NULL PRIMARY KEY,owner TEXT NOT NULL,payload TEXT NOT NULL,sessionId TEXT,status TEXT NOT NULL,endedAt INTEGER NOT NULL,score INTEGER NOT NULL,duration REAL NOT NULL,kills INTEGER NOT NULL,bosses INTEGER NOT NULL)");
+   db.execSQL("CREATE INDEX index_rift_runs_owner_endedAt ON rift_runs(owner,endedAt)");
+  }
+ };
  public static final androidx.room.migration.Migration MIGRATION_5_6 = new androidx.room.migration.Migration(5,6) {
   @Override public void migrate(@androidx.annotation.NonNull androidx.sqlite.db.SupportSQLiteDatabase db) {
    db.execSQL("CREATE TABLE cloud_records (owner TEXT NOT NULL,recordKey TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT,nonce TEXT,pending INTEGER NOT NULL,PRIMARY KEY(owner,recordKey))");

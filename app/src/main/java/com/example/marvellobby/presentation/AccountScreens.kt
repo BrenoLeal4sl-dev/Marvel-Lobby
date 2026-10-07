@@ -6,6 +6,7 @@ import com.example.marvellobby.BuildConfig
 import com.example.marvellobby.presentation.social.bioField
 import com.example.marvellobby.presentation.social.socialStats
 import com.example.marvellobby.presentation.social.favoriteSharing
+import com.example.marvellobby.rift.presentation.riftProfile
 
 fun ScreenRenderer.profile() {
     val user=state.user ?: return
@@ -30,6 +31,7 @@ fun ScreenRenderer.profile() {
     }
     state.formError?.let { body(it) }
     if(state.authBusy)add(ui.loading())
+    riftProfile()
     label("On this device")
     val stats=ui.row()
     val counts=listOf(state.library.count { it.favorite } to "Favorites",state.library.count { it.viewedAt>0 } to "Recently Viewed")

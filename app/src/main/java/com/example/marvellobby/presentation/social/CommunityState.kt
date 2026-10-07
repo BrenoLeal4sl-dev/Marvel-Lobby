@@ -21,7 +21,7 @@ fun CommunityState.receiveFavorites(userId: String,type: ResourceType,page: Publ
     return copy(publicFavorites=pages+(key to PublicFavoritesState(
         items=(prior+page.items).distinctBy { it.id },next=page.next,visible=page.visible,loaded=true)))
 }
-data class PendingDirectMessage(val text: String,val clientId: String,val shared: SharedContent?=null)
+data class PendingDirectMessage(val text: String,val clientId: String,val shared: SharedContent?=null,val rift: RiftShare?=null)
 data class ActivityState(val items: List<CommunityActivity> = emptyList(),val next: Int?=null,val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null)
 data class NotificationsState(val items: List<CommunityNotification> = emptyList(),val next: Int?=null,val loading: Boolean=false,val loaded: Boolean=false,val error: String?=null,val unread: Int=0)
 data class CloudSyncState(val enabled: Boolean?=null,val busy: Boolean=false,val error: String?=null,val pending: Int=0,val lastSync: Long=0,val recovered: Boolean=false)
@@ -45,7 +45,7 @@ data class CommunityState(val profiles: Map<String,SocialProfile> = emptyMap(),v
     val opening: Boolean=false,val notice: String?=null,val requiresSignIn: Boolean=false,
     val publicFavorites: Map<String,PublicFavoritesState> = emptyMap(),val favoriteTypes: Map<String,ResourceType> = emptyMap(),
     val sharing: FavoriteSharingState=FavoriteSharingState(),val activity: ActivityState=ActivityState(),
-    val notifications: NotificationsState=NotificationsState(),val activitySharing: FavoriteSharingState=FavoriteSharingState(),val shareContent: SharedContent?=null,val cloud: CloudSyncState=CloudSyncState())
+    val notifications: NotificationsState=NotificationsState(),val activitySharing: FavoriteSharingState=FavoriteSharingState(),val shareContent: SharedContent?=null,val cloud: CloudSyncState=CloudSyncState(),val shareRift: RiftShare?=null)
 
 /** Pause online work without discarding messages, pending send nonces, people or drafts. */
 fun CommunityState.sessionRequired(required: Boolean)=copy(

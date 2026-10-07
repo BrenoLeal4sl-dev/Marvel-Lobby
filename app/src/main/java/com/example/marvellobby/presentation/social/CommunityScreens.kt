@@ -149,7 +149,8 @@ fun ScreenRenderer.directChat() {
         val bubble=ui.column(16).apply {
             background=if(mine)ui.gradient(ui.palette.red,android.graphics.Color.parseColor("#A91529"),22) else ui.shape(ui.palette.surface,border=true)
         }
-        if(message.shared!=null)ui.add(bubble,sharedCard(message.shared),0)
+        if(message.rift!=null)ui.add(bubble,riftCard(message.rift),0)
+        else if(message.shared!=null)ui.add(bubble,sharedCard(message.shared),0)
         else {
             val text=ui.text(message.text,14,if(mine)android.graphics.Color.WHITE else ui.palette.text)
             text.text=message.text
@@ -164,6 +165,7 @@ fun ScreenRenderer.directChat() {
     }
     if(chat.sending)add(ui.loading())
     chat.pending?.shared?.let { add(sharedCard(it));body("Confirming shared record…") }
+    chat.pending?.rift?.let { add(riftCard(it));body("Confirming shared record…") }
     chat.sendError?.let {
         body(it)
         button("Retry sending",false) { social.send(id,retry=true) }
@@ -178,6 +180,28 @@ internal fun ScreenRenderer.sharedCard(record: SharedContent): View {
     ui.add(box,ui.text("Open record",12,ui.palette.secondary),10)
     ui.clickable(box,onClick={ vm.open(record.type,ComicReference(record.id,record.name)) })
     return box
+}
+internal fun ScreenRenderer.riftCard(record: RiftShare): View {
+    val box=ui.column(18).apply { background=ui.gradient(0xFF641529.toInt(),0xFF18233C.toInt()) }
+    ui.add(box,ui.text("RIFT ARENA",12,0xFFFFA8A1.toInt(),true),0)
+    ui.add(box,ui.text(if(record.kind=="challenge")"Rift Challenge" else record.score?.toString().orEmpty(),28,android.graphics.Color.WHITE,true),12)
+    ui.add(box,ui.text(if(record.kind=="challenge")"Open challenge" else "Beat this record",13,0xFFF0D8E0.toInt()),12)
+    ui.clickable(box,0xFF311526.toInt()) { activity.openRift(challengeId=record.id.takeIf { record.kind=="challenge" }) }
+    box.background=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF),ui.gradient(0xFF641529.toInt(),0xFF18233C.toInt()),null)
+    return box
+}
+fun ScreenRenderer.shareRift() {
+    if(!onlineCommunity())return
+    val record=social.state.value.shareRift ?: return
+    title("Share Rift Arena");add(riftCard(record));body("Choose someone to send this record to.")
+    val page=social.state.value.people[state.route.key] ?: PeopleState()
+    val field=ui.field("Search people by name or username",page.query,idKey="rift:people")
+    field.doAfterTextChanged { social.searchPeople(it.toString()) };add(field,height=56)
+    if(page.loading||social.state.value.opening)add(ui.loading())
+    page.error?.let { sectionError(it) { social.loadPeople() } }
+    social.state.value.notice?.let(::body)
+    page.items.filter { it.id!=social.userId }.forEach { person ->add(personRow(person,ui.translate("Send")) { social.openConversation(person.id!!,rift=record) },gap=12) }
+    if(page.next!=null && !page.loading)button("Load more",false) { social.loadPeople(more=true) }
 }
 
 fun ScreenRenderer.shareContent() {
@@ -209,8 +233,9 @@ fun ScreenRenderer.followingActivity() {
     page.error?.let { sectionError(it) { social.loadActivity() } }
     if(page.loaded && page.items.isEmpty())body("No activity yet. Follow people who choose to share their discoveries.")
     page.items.forEach { item ->
-        add(personRow(item.actor,ui.translate("Saved a favorite")) { vm.navigate(Route("publicProfile",userId=item.actor.id)) })
-        add(sharedCard(item.content),gap=8)
+        val caption=when(item.rift?.achievement) {"record"->"New Rift record";"first_boss"->"First Rift boss defeated";else->"Saved a favorite"}
+        add(personRow(item.actor,ui.translate(caption)) { vm.navigate(Route("publicProfile",userId=item.actor.id)) })
+        add(item.rift?.let(::riftCard) ?: sharedCard(item.content),gap=8)
         body(DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(item.at)))
     }
     if(page.next!=null && !page.loading)button("Load more",false) { social.loadActivity(more=true) }

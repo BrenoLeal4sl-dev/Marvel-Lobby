@@ -7,6 +7,8 @@ import { Community,type CommunityEvent,type PageInput } from './community.js';
 import { unauthorized,ApiError } from './errors.js';
 import {PublicFavorites,FAVORITE_TYPES,type FavoriteInput} from './public-favorites.js';
 import {SocialExtras,type SharedContent} from './social-extras.js';
+import {riftRoutes} from './rift-routes.js';
+import type {RiftShareInput} from './rift.js';
 
 export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   await app.register(websocket,{options:{maxPayload:256}});
@@ -17,6 +19,7 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
     }
   };
   const social=new Community(accounts,notify);
+  await riftRoutes(app,accounts,users=>notify(users,{type:'community'}));
   const favorites=new PublicFavorites(accounts,notify);
   const extras=new SocialExtras(accounts,notify);
   const auth=async(request:FastifyRequest)=> {
@@ -65,10 +68,11 @@ export async function communityRoutes(app:FastifyInstance,accounts:Accounts) {
   app.get<{Querystring:PageInput}>('/v1/community/conversations',{schema:{querystring:page}},async request=>social.inbox(await auth(request),request.query));
   app.get<{Params:{id:string};Querystring:PageInput}>('/v1/community/conversations/:id/messages',{schema:{params,querystring:page}},
     async request=>social.messages(await auth(request),request.params.id.toLowerCase(),request.query));
-  app.post<{Params:{id:string};Body:{text:string;clientId:string;shared?:SharedContent}}>('/v1/community/conversations/:id/messages',
+  app.post<{Params:{id:string};Body:{text:string;clientId:string;shared?:SharedContent;rift?:RiftShareInput}}>('/v1/community/conversations/:id/messages',
     {config:{rateLimit:{max:40,timeWindow:'1 minute'}},schema:{params,body:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:4000},clientId:uuid,
-      shared:{type:'object',properties:{type:{type:'string',enum:FAVORITE_TYPES},id:{type:'integer',minimum:1,maximum:2147483647},name:{type:'string',minLength:1,maxLength:400},imageUrl:{type:['string','null'],maxLength:2048}},required:['type','id','name','imageUrl'],additionalProperties:false}},required:['text','clientId'],additionalProperties:false}}},
-    async(request,reply)=>reply.code(201).send(await social.send(await auth(request),request.params.id.toLowerCase(),request.body.text,request.body.clientId.toLowerCase(),request.body.shared)));
+      shared:{type:'object',properties:{type:{type:'string',enum:FAVORITE_TYPES},id:{type:'integer',minimum:1,maximum:2147483647},name:{type:'string',minLength:1,maxLength:400},imageUrl:{type:['string','null'],maxLength:2048}},required:['type','id','name','imageUrl'],additionalProperties:false},
+      rift:{type:'object',properties:{kind:{type:'string',enum:['result','challenge']},id:uuid},required:['kind','id'],additionalProperties:false}},required:['text','clientId'],additionalProperties:false}}},
+    async(request,reply)=>reply.code(201).send(await social.send(await auth(request),request.params.id.toLowerCase(),request.body.text,request.body.clientId.toLowerCase(),request.body.shared,request.body.rift)));
   app.post<{Params:{id:string};Body:{lastId:string}}>('/v1/community/conversations/:id/read',
     {schema:{params,body:{type:'object',properties:{lastId:{type:'string',pattern:'^[0-9]{1,19}$'}},required:['lastId'],additionalProperties:false}}},
     async request=>social.read(await auth(request),request.params.id.toLowerCase(),request.body.lastId));

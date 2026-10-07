@@ -86,6 +86,16 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     fun navigate(destination: Route, replace: Boolean=false, replaceCurrent: Boolean=false) {
         showRoute(navigator.navigate(destination,replace,replaceCurrent))
     }
+    fun loadRiftStats(id: String?=state.value.user?.id) {
+        val user=state.value.user ?: return;val key=id ?: user.ownerKey;val forOwner=owner
+        if(jobs["rift:$key"]?.isActive==true)return
+        jobs["rift:$key"]=viewModelScope.launch {
+            try {
+                val result=if(user.online && id!=null)app.rift.profile(forOwner,id)else app.rift.localStats(forOwner)
+                if(owner==forOwner)mutable.update { it.copy(riftStats=it.riftStats+(key to result),riftErrors=it.riftErrors-key) }
+            }catch(e: CancellationException){throw e}catch(_: Exception){if(owner==forOwner)mutable.update { it.copy(riftErrors=it.riftErrors+(key to "Arena service unavailable. Your local results are kept. Try again or play practice.")) }}
+        }
+    }
     private fun showRoute(route: Route) {
         if(state.value.route.screen!=route.screen)authTouched.clear()
         mutable.update { it.copy(route=route,formError=null,authErrors=emptyMap(),

@@ -11,17 +11,17 @@ import org.json.JSONObject
 import java.util.UUID
 
 data class RiftSession(val id: String,val seed: Int,val character: String,val version: String,val challengeId: String?)
-data class RiftStats(val runs: Int=0,val best: Int=0,val survival: Float=0f,val kills: Int=0,val bosses: Int=0,val globalPosition: Int?=null)
+data class RiftStats(val runs: Int=0,val best: Int=0,val survival: Float=0f,val kills: Int=0,val bosses: Int=0,val globalPosition: Int?=null,val main:String?=null)
 data class RiftRank(val userId: String,val username: String,val name: String,val score: Int,val position: Int)
 data class RiftRankPage(val items: List<RiftRank>,val next: Int?,val ownPosition: Int?,val ownScore: Int?)
 data class RiftChallenge(val id: String,val challenger: String,val challenged: String,val ownScore: Int?,val peerScore: Int?,val expiresAt: String,val attempted: Boolean=false,val version: String=RiftRules.VERSION)
 data class RiftChallengePage(val items: List<RiftChallenge>,val next: Int?)
 class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccountRepository) {
     private val gson=Gson();private val mutex=Mutex()
-    suspend fun session(owner: String,clientId: String,challengeId: String?): RiftSession {
-        val json=accounts.riftRequest(owner,"POST","/v1/rift/sessions",JSONObject().put("clientId",clientId).apply { challengeId?.let { put("challengeId",it) } })
+    suspend fun session(owner: String,clientId: String,challengeId: String?,character:String="spider-man"): RiftSession {
+        val json=accounts.riftRequest(owner,"POST","/v1/rift/sessions",JSONObject().put("clientId",clientId).put("character",character).put("version",RiftRules.VERSION).apply { challengeId?.let { put("challengeId",it) } })
         val id=json.getString("id");require(UUID.fromString(id).toString()==id)
-        require(json.getString("version")==RiftRules.VERSION && json.getString("character")==RiftCharacters.spider.key)
+        require(json.getString("version")==RiftRules.VERSION && RiftCharacters.all.any{it.key==json.getString("character")})
         return RiftSession(id,json.getInt("seed"),json.getString("character"),json.getString("version"),json.optString("challengeId").takeUnless { it=="null"||it.isBlank() })
     }
     suspend fun save(owner: String,id: String,result: RunResult,session: RiftSession?)=withContext(Dispatchers.IO+NonCancellable) {
@@ -43,9 +43,9 @@ class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccoun
             }
         }
     } }
-    suspend fun ranking(owner: String,mode: String,offset: Int): RiftRankPage {
+    suspend fun ranking(owner: String,mode: String,offset: Int,character:String="spider-man"): RiftRankPage {
         require(mode in setOf("global","friends","weekly","character") && offset>=0)
-        val json=accounts.riftRequest(owner,"GET","/v1/rift/ranking?mode=$mode&offset=$offset")
+        val json=accounts.riftRequest(owner,"GET","/v1/rift/ranking?mode=$mode&offset=$offset&character=${RiftCharacters.get(character).key}&version=${RiftRules.VERSION}")
         val list=json.getJSONArray("items")
         val items=(0 until list.length()).map { val row=list.getJSONObject(it)
             RiftRank(UUID.fromString(row.getString("userId")).toString(),row.getString("username"),row.getString("name"),row.getInt("score"),row.getInt("position")) }
@@ -54,8 +54,8 @@ class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccoun
     }
     suspend fun abandon(owner: String,id: String)=accounts.riftRequest(owner,"POST","/v1/rift/sessions/${UUID.fromString(id)}/abandon",JSONObject())
     suspend fun profile(owner: String,userId: String): RiftStats {
-        val j=accounts.riftRequest(owner,"GET","/v1/rift/users/${UUID.fromString(userId)}")
-        return RiftStats(j.getInt("runs"),j.getInt("best"),j.getDouble("survival").toFloat(),j.getInt("kills"),j.getInt("bosses"),j.optInt("globalPosition").takeUnless { j.isNull("globalPosition") })
+        val j=accounts.riftRequest(owner,"GET","/v1/rift/users/${UUID.fromString(userId)}?version=${RiftRules.VERSION}")
+        return RiftStats(j.getInt("runs"),j.getInt("best"),j.getDouble("survival").toFloat(),j.getInt("kills"),j.getInt("bosses"),j.optInt("globalPosition").takeUnless { j.isNull("globalPosition") },j.optString("main").takeUnless{it=="null"||it.isBlank()})
     }
     suspend fun challenges(owner: String,offset: Int,id: String?=null): RiftChallengePage {
         val filter=id?.let { "&id=${UUID.fromString(it)}" }.orEmpty()
@@ -63,8 +63,11 @@ class RiftRepository(private val dao: RiftDao,private val accounts: OnlineAccoun
         return RiftChallengePage((0 until array.length()).map { val r=array.getJSONObject(it)
             RiftChallenge(UUID.fromString(r.getString("id")).toString(),r.getString("challenger"),r.getString("challenged"),r.optInt("own_score").takeUnless { r.isNull("own_score") },r.optInt("peer_score").takeUnless { r.isNull("peer_score") },r.getString("expires_at"),r.optBoolean("attempted"),r.optString("game_version",RiftRules.VERSION)) },j.optInt("next").takeUnless { j.isNull("next") })
     }
-    suspend fun challenge(owner: String,target: String,nonce: String)=accounts.riftRequest(owner,"POST","/v1/rift/challenges",JSONObject().put("userId",UUID.fromString(target).toString()).put("clientId",nonce))
+    suspend fun challenge(owner: String,target: String,nonce: String,character:String="spider-man")=accounts.riftRequest(owner,"POST","/v1/rift/challenges",JSONObject().put("userId",UUID.fromString(target).toString()).put("clientId",nonce).put("character",character).put("version",RiftRules.VERSION))
+    suspend fun mastery(owner:String):Map<String,Int> = withContext(Dispatchers.IO){
+        val totals=mutableMapOf<String,Int>();dao.masteryRows(owner).forEach{row->runCatching{result(row)}.getOrNull()?.let{r->if(RiftCharacters.all.any{it.key==r.character})totals[r.character]=(totals[r.character]?:0)+r.kills}};totals
+    }
     suspend fun localStats(owner: String): RiftStats=withContext(Dispatchers.IO) {
-        val total=dao.totals(owner);RiftStats(total.runs,total.best,total.survival,total.kills,total.bosses)
+        val total=dao.totals(owner);val main=dao.masteryRows(owner).mapNotNull{runCatching{result(it).character}.getOrNull()}.groupingBy{it}.eachCount().maxByOrNull{it.value}?.key;RiftStats(total.runs,total.best,total.survival,total.kills,total.bosses,main=main)
     }
 }

@@ -5,15 +5,22 @@ import {readFileSync} from 'node:fs';
 import {createApp} from '../src/app.js';
 import {TestDatabase} from './database-fixture.js';
 import type {SessionResponse} from '../src/contracts.js';
-import {calculateScore,type RiftResult} from '../src/rift.js';
+import {calculateScore,RIFT_HEROES,type RiftResult} from '../src/rift.js';
 let db:TestDatabase,app:Awaited<ReturnType<typeof createApp>>,a:SessionResponse,b:SessionResponse,c:SessionResponse;
-const req=(method:'GET'|'POST'|'PUT',url:string,who:SessionResponse,payload?:unknown)=>app.inject({method,url,payload:payload as any,headers:{authorization:`Bearer ${who.accessToken}`}});
+function version3(method:string,url:string,payload?:unknown) {
+ const body=method==='POST'&&['/v1/rift/sessions','/v1/rift/challenges'].includes(url)?{version:'rift-3',...(payload as object)}:payload;
+ const path=method==='GET'&&(url.startsWith('/v1/rift/ranking')||url.startsWith('/v1/rift/users/'))?url+(url.includes('?')?'&':'?')+'version=rift-3':url;
+ return {url:path,payload:body as any};
+}
+const req=(method:'GET'|'POST'|'PUT',url:string,who:SessionResponse,payload?:unknown)=>app.inject({method,...version3(method,url,payload),headers:{authorization:`Bearer ${who.accessToken}`}});
 before(async()=> {db=await TestDatabase.create();app=await createApp(db,{limit:10000});
  const register=async(username:string)=>(await app.inject({method:'POST',url:'/v1/auth/register',payload:{name:username,username,email:`${username}@example.invalid`,password:'Password2026'},remoteAddress:'10.0.0.1'})).json<SessionResponse>();
  a=await register('rift_a');b=await register('rift_b');c=await register('rift_c');
 });
+
+
 after(async()=>{await app?.close();await db?.close();});
-const metrics=(seed:number):RiftResult=>({seed,character:'spider-man',version:'rift-2',duration:1,kills:0,elites:0,bosses:0,damage:0,maxCombo:0,level:1,score:10,extracted:false,upgrades:{}});
+const metrics=(seed:number):RiftResult=>({seed,character:'spider-man',version:'rift-3',duration:1,kills:0,elites:0,bosses:0,damage:0,maxCombo:0,level:1,score:10,extracted:false,upgrades:{}});
 test('previous-version pending results remain accepted but never enter the new ranking',async()=> {
  const session=(await req('POST','/v1/rift/sessions',c,{clientId:randomUUID()})).json();
  await db.engine.query('UPDATE marvel_lobby.arena_sessions SET game_version=$1 WHERE id=$2',['rift-1',session.id]);
@@ -95,4 +102,55 @@ test('abandonment frees the session without admitting a later result; migration 
  assert.equal((await req('GET',`/v1/rift/users/${a.user.id}`,a)).json().best,20);
  const publicRows=await db.transaction(c.user.id,q=>q.query('SELECT * FROM marvel_lobby.arena_public_runs'));
  assert.ok(publicRows.length>0);assert.equal(publicRows[0]!.seed,undefined);assert.equal(publicRows[0]!.client_id,undefined);
+});
+
+test('six heroes issue private sessions, preserve character results and filter rankings',async()=> {
+ const player=(await app.inject({method:'POST',url:'/v1/auth/register',payload:{name:'Hero player',username:'hero_player',email:'heroes@example.invalid',password:'Password2026'},remoteAddress:'10.0.0.2'})).json<SessionResponse>();
+ const heroReq=(method:'GET'|'POST',url:string,payload?:unknown)=>app.inject({method,...version3(method,url,payload),headers:{authorization:`Bearer ${player.accessToken}`},remoteAddress:'10.0.0.25'});
+ for(const character of RIFT_HEROES) {
+  const clientId=randomUUID();const issued=await heroReq('POST','/v1/rift/sessions',{clientId,character});
+  assert.equal(issued.statusCode,200,issued.body);const session=issued.json();assert.equal(session.character,character);
+  assert.equal((await heroReq('POST','/v1/rift/sessions',{clientId,character})).json().id,session.id);
+  if(character!=='spider-man')assert.equal((await heroReq('POST',`/v1/rift/sessions/${session.id}/result`,metrics(session.seed))).statusCode,400);
+  const submitted=await heroReq('POST',`/v1/rift/sessions/${session.id}/result`,{...metrics(session.seed),character});assert.equal(submitted.statusCode,200,submitted.body);
+  const ranking=await heroReq('GET',`/v1/rift/ranking?mode=character&character=${character}`);
+  assert.equal(ranking.statusCode,200,ranking.body);assert.ok(ranking.json().items.every((r:any)=>r.character===character));assert.ok(ranking.json().own);
+ }
+ assert.equal((await heroReq('POST','/v1/rift/sessions',{clientId:randomUUID(),character:'invented'})).statusCode,400);
+ await heroReq('POST',`/v1/community/users/${a.user.id}/follow`);
+ const challenge=await heroReq('POST','/v1/rift/challenges',{userId:a.user.id,clientId:randomUUID(),character:'hulk'});
+ assert.equal(challenge.statusCode,200,challenge.body);
+ const id=challenge.json().id;
+ const issued=await heroReq('POST','/v1/rift/sessions',{clientId:randomUUID(),challengeId:id,character:'iron-man'});
+ assert.equal(issued.statusCode,200,issued.body);assert.equal(issued.json().character,'hulk');
+ const before=(await db.engine.query<{count:string}>('SELECT count(*) FROM marvel_lobby.arena_runs')).rows[0]!.count;
+ await db.engine.exec('SET ROLE schema_admin');
+ await db.engine.exec(readFileSync(new URL('../../../database/009_rift_heroes.sql',import.meta.url),'utf8'));
+ await db.engine.exec('RESET ROLE');
+ assert.equal((await db.engine.query<{count:string}>('SELECT count(*) FROM marvel_lobby.arena_runs')).rows[0]!.count,before);
+});
+
+test('missing hero migration keeps Spider-Man available and returns an actionable service error for new heroes',async()=> {
+ const player=(await app.inject({method:'POST',url:'/v1/auth/register',payload:{name:'Migration player',username:'migration_player',email:'migration@example.invalid',password:'Password2026'},remoteAddress:'10.0.0.26'})).json<SessionResponse>();
+ await db.engine.exec('SET ROLE schema_admin; DELETE FROM marvel_lobby.schema_migrations WHERE version=8; RESET ROLE;');
+ try {
+  const refused=await req('POST','/v1/rift/sessions',player,{clientId:randomUUID(),character:'hulk'});
+  assert.equal(refused.statusCode,503,refused.body);assert.equal(refused.json().error.code,'ARENA_NOT_READY');
+  const legacy=await req('POST','/v1/rift/sessions',player,{clientId:randomUUID(),character:'spider-man'});
+  assert.equal(legacy.statusCode,200,legacy.body);
+ }finally {
+  await db.engine.exec("SET ROLE schema_admin; INSERT INTO marvel_lobby.schema_migrations(version,description) VALUES(8,'six-hero test'); RESET ROLE;");
+ }
+});
+
+test('older clients keep version-2 sessions and rankings while version-3 clients stay isolated',async()=> {
+ const player=(await app.inject({method:'POST',url:'/v1/auth/register',payload:{name:'Legacy player',username:'legacy_player',email:'legacy@example.invalid',password:'Password2026'},remoteAddress:'10.0.0.27'})).json<SessionResponse>();
+ const old=(method:'GET'|'POST',url:string,payload?:unknown)=>app.inject({method,url,payload:payload as any,headers:{authorization:`Bearer ${player.accessToken}`},remoteAddress:'10.0.0.27'});
+ const issued=await old('POST','/v1/rift/sessions',{clientId:randomUUID()});assert.equal(issued.statusCode,200,issued.body);
+ const session=issued.json();assert.equal(session.version,'rift-2');assert.equal(session.character,'spider-man');
+ const submitted=await old('POST',`/v1/rift/sessions/${session.id}/result`,{...metrics(session.seed),version:'rift-2'});assert.equal(submitted.statusCode,200,submitted.body);
+ assert.equal((await old('GET','/v1/rift/ranking')).json().own.score,10);
+ assert.equal((await old('GET',`/v1/rift/users/${player.user.id}`)).json().runs,1);
+ assert.equal((await req('GET','/v1/rift/ranking',player)).json().own,null);
+ assert.equal((await old('POST','/v1/rift/sessions',{clientId:randomUUID(),character:'hulk'})).statusCode,400);
 });

@@ -16,6 +16,8 @@ object Translations {
         "Beat this record" to "Bater este recorde",
         "New Rift record" to "Novo recorde na Rift",
         "First Rift boss defeated" to "Primeiro boss da Rift derrotado",
+        "Arena update pending on the server. Offline practice is available." to "A atualização da Arena está pendente no servidor. O treino offline está disponível.",
+        "Main" to "Mais jogado",
         "Sign in again to use competitive play." to "Entre na sua conta para jogar no modo competitivo.",
         "The previous competitive session is still active. Finish it or play practice." to "A sessão competitiva anterior ainda está ativa. Finalize-a ou jogue no treino.",
         "Arena service unavailable. Your local results are kept. Try again or play practice." to "O serviço da Arena está indisponível. Seus resultados locais foram preservados. Tente novamente ou jogue no treino.",

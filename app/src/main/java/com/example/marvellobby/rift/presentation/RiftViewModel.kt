@@ -14,7 +14,7 @@ import java.util.UUID
 data class RiftUiState(val page: String="lobby",val busy: Boolean=false,val notice: String?=null,
     val stats: RiftStats=RiftStats(),val records: List<StoredRiftRun> = emptyList(),val rank: RiftRankPage?=null,
     val mode: String="global",val challenges: RiftChallengePage?=null,val newRecord: Boolean=false,val resultStatus: String="",
-    val challengeId: String?=null)
+    val challengeId: String?=null,val hero:String="spider-man",val previewHero:String="spider-man",val mastery:Map<String,Int> = emptyMap())
 class RiftViewModel(application: Application): AndroidViewModel(application) {
     private val repo=(application as MarvelApplication).rift
     private val preferences=com.example.marvellobby.data.local.PreferencesStore(application)
@@ -27,7 +27,7 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
     private var owner="";private var runId="";private var savedId="";private var requestId=UUID.randomUUID().toString()
     private var job: Job?=null
     val online get()=owner.startsWith("remote:")
-    fun initialize(owner: String) {if(this.owner.isNotEmpty())return;this.owner=owner;mutable.update{it.copy(busy=true)};viewModelScope.launch {tutorialComplete=preferences.riftTutorial(owner).first();tutorialLoaded=true;if(job==null)refresh()else {val records=repo.history(owner);val stats=repo.localStats(owner);mutable.update{it.copy(records=records,stats=stats)}}} }
+    fun initialize(owner: String) {if(this.owner.isNotEmpty())return;this.owner=owner;mutable.update{it.copy(busy=true)};viewModelScope.launch {tutorialComplete=preferences.riftTutorial(owner).first();mutable.update{it.copy(hero=preferences.riftHero(owner).first())};tutorialLoaded=true;if(job==null)refresh()else {val records=repo.history(owner);val stats=repo.localStats(owner);val mastery=repo.mastery(owner);mutable.update{it.copy(records=records,stats=stats,mastery=mastery)}}} }
     fun replayTutorial() {if(!tutorialLoaded)return;afterTutorial=null;session=null;engine=RiftEngine(1443,tutorial=true);mutable.update {it.copy(page="game",notice=null)} }
     fun finishTutorial() {
         if(engine?.tutorial!=true||engine?.tutorialStep!=6)return
@@ -39,6 +39,7 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
         }
     }
     private fun notice(error: Exception)=when {
+        error is com.example.marvellobby.data.remote.LobbyApiException && error.code=="ARENA_NOT_READY" -> "Arena update pending on the server. Offline practice is available."
         error is com.example.marvellobby.data.remote.LobbyApiException && error.status==401 -> "Sign in again to use competitive play."
         error is com.example.marvellobby.data.remote.LobbyApiException && error.status==409 -> "The previous competitive session is still active. Finish it or play practice."
         else -> "Arena service unavailable. Your local results are kept. Try again or play practice."
@@ -46,13 +47,16 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
     fun refresh(sync: Boolean=false) {job?.cancel();job=viewModelScope.launch {
         mutable.update { it.copy(busy=true,notice=null) }
         try {
-            val records=repo.history(owner);val stats=repo.localStats(owner)
-            mutable.update { it.copy(records=records,stats=stats) }
+            val records=repo.history(owner);val stats=repo.localStats(owner);val mastery=repo.mastery(owner)
+            mutable.update { it.copy(records=records,stats=stats,mastery=mastery) }
             if(online && sync)repo.sync(owner)
             val updatedRecords=repo.history(owner);mutable.update { it.copy(busy=false,records=updatedRecords) }
         } catch(e: CancellationException) {throw e} catch(e: Exception) {mutable.update { it.copy(busy=false,notice=notice(e)) }}
     } }
-    fun page(page: String) {mutable.update { it.copy(page=page,notice=null) };when(page) {"history","lobby"->refresh();"ranking"->ranking();"challenges"->challenges()}}
+    fun selectHero(key:String){val hero=RiftCharacters.get(key);mutable.update{it.copy(hero=hero.key,page="lobby")};viewModelScope.launch{preferences.riftHero(owner,hero.key)}}
+    fun heroKills(key:String)=state.value.mastery[key]?:0
+    fun inspectHero(key:String){mutable.update{it.copy(previewHero=RiftCharacters.get(key).key)}}
+    fun page(page: String) {mutable.update { it.copy(page=page,notice=null,previewHero=if(page=="characters")it.hero else it.previewHero) };when(page) {"history","lobby"->refresh();"ranking"->ranking();"challenges"->challenges()}}
     fun start(practice: Boolean=false,challengeId: String?=null) {
         if(!tutorialLoaded)return
         if(mutable.value.busy && !practice)return
@@ -60,8 +64,8 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
         job?.cancel();job=viewModelScope.launch {
             mutable.update { it.copy(busy=true,notice=null,challengeId=challengeId) }
             try {
-                session=if(!practice && online)repo.session(owner,requestId,challengeId)else null
-                engine=RiftEngine(session?.seed ?: SecureRandom().nextInt())
+                session=if(!practice && online)repo.session(owner,requestId,challengeId,state.value.hero)else null
+                engine=RiftEngine(session?.seed ?: SecureRandom().nextInt(),RiftCharacters.get(session?.character?:state.value.hero))
                 runId=UUID.randomUUID().toString();savedId="";requestId=UUID.randomUUID().toString()
                 mutable.update { it.copy(page="game",busy=false,newRecord=false,resultStatus=if(session==null)"practice" else "competitive") }
             } catch(e: CancellationException) {throw e} catch(e: Exception) {mutable.update { it.copy(busy=false,notice=notice(e)) }}
@@ -75,8 +79,8 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
             repo.save(owner,id,result,issued)
             if(id==runId)mutable.update { it.copy(newRecord=result.score>prior,resultStatus=if(issued==null)"practice" else "pending") }
             try {if(online)repo.sync(owner)}catch(e: CancellationException){throw e}catch(_: Exception) {mutable.update { it.copy(notice="Arena service unavailable. Your local results are kept. Try again or play practice.") }}
-            val records=repo.history(owner);val status=records.firstOrNull { it.id==id }?.status.orEmpty();val stats=repo.localStats(owner)
-            mutable.update { it.copy(records=records,stats=stats,resultStatus=if(id==runId)status else it.resultStatus) }
+            val records=repo.history(owner);val status=records.firstOrNull { it.id==id }?.status.orEmpty();val stats=repo.localStats(owner);val mastery=repo.mastery(owner)
+            mutable.update { it.copy(records=records,stats=stats,mastery=mastery,resultStatus=if(id==runId)status else it.resultStatus) }
         }
     }
     fun abandon(next: Boolean=false) {
@@ -93,7 +97,7 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
         job?.cancel();job=viewModelScope.launch {
             val prior=state.value.rank;val offset=if(more)prior?.next ?: return@launch else 0
             mutable.update { it.copy(busy=true,mode=mode,notice=null,rank=if(more)prior else null) }
-            try {val page=repo.ranking(owner,mode,offset);mutable.update { it.copy(busy=false,rank=if(more)page.copy(items=prior!!.items+page.items)else page) }}
+            try {val page=repo.ranking(owner,mode,offset,state.value.hero);mutable.update { it.copy(busy=false,rank=if(more)page.copy(items=prior!!.items+page.items)else page) }}
             catch(e: CancellationException){throw e}catch(e: Exception){mutable.update { it.copy(busy=false,notice=notice(e)) }}
         }
     }
@@ -110,7 +114,7 @@ class RiftViewModel(application: Application): AndroidViewModel(application) {
     fun challenge(target: String) {
         job?.cancel();job=viewModelScope.launch {
             mutable.update { it.copy(page="challenges",busy=true,notice=null) }
-            try {val challenge=repo.challenge(owner,target,requestId);requestId=UUID.randomUUID().toString();mutable.update { it.copy(busy=false,challengeId=challenge.getString("id")) };challenges()}
+            try {val chosen=if(tutorialLoaded)state.value.hero else preferences.riftHero(owner).first();val challenge=repo.challenge(owner,target,requestId,chosen);requestId=UUID.randomUUID().toString();mutable.update { it.copy(busy=false,challengeId=challenge.getString("id")) };challenges()}
             catch(e: CancellationException){throw e}catch(e: Exception){mutable.update { it.copy(busy=false,notice=notice(e)) }}
         }
     }

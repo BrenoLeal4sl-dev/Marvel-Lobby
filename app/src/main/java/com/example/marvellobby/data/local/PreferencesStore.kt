@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.map
 private val Context.store by preferencesDataStore("marvel_preferences")
 data class AppPreferences(val onboarded: Boolean=false, val session: String="", val appearance: String="dark", val language: String="pt",val languageChosen:Boolean=false)
 class PreferencesStore(private val context: Context) {
-    fun riftTutorial(owner: String)=context.store.data.map { it[booleanPreferencesKey("rift_tutorial_"+owner)] ?: false }
-    suspend fun finishRiftTutorial(owner: String) { context.store.edit { it[booleanPreferencesKey("rift_tutorial_"+owner)]=true } }
+    fun riftTutorial(owner: String)=context.store.data.map { it[booleanPreferencesKey("rift_tutorial_v3_"+owner)] ?: false }
+    suspend fun finishRiftTutorial(owner: String) { context.store.edit { it[booleanPreferencesKey("rift_tutorial_v3_"+owner)]=true } }
+    fun riftHero(owner:String)=context.store.data.map {it[stringPreferencesKey("rift_hero_"+owner)]?:"spider-man"}
+    suspend fun riftHero(owner:String,key:String){require(com.example.marvellobby.rift.engine.RiftCharacters.all.any{it.key==key});context.store.edit{it[stringPreferencesKey("rift_hero_"+owner)]=key}}
     private val onboarding = booleanPreferencesKey("onboarded")
     private val session = stringPreferencesKey("session")
     private val appearance = stringPreferencesKey("appearance")

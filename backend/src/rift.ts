@@ -4,7 +4,8 @@ import type {Principal} from './contracts.js';
 import type {Query,Row} from './database.js';
 import {ApiError,invalid} from './errors.js';
 
-export const RIFT_VERSION='rift-2';
+export const RIFT_VERSION='rift-3';
+export const RIFT_HEROES=['spider-man','iron-man','hulk','thor','wolverine','doctor-strange'];
 const caps:Record<string,number>={DAMAGE:4,SPEED:3,ATTACK_SPEED:3,HEALTH:3,ARMOR:3,DASH:3,CRITICAL:3,PIERCE:2,RICOCHET:1,EXPLOSION:1,SLOW:1,SPECIAL:3};
 export interface RiftResult {seed:number;character:string;duration:number;kills:number;elites:number;bosses:number;damage:number;maxCombo:number;level:number;score:number;extracted:boolean;upgrades:Record<string,number>;version:string}
 export function calculateScore(r:RiftResult) { return Math.floor(r.duration)*10+r.kills*40+r.elites*150+r.bosses*1200+Math.floor(Math.floor(Math.min(r.damage,200000))/5)+Math.min(r.maxCombo,200)*20; }
@@ -16,9 +17,9 @@ export async function resolveRiftShare(q:Query,userId:string,input:RiftShareInpu
   if(!row)throw new ApiError(404,'ARENA_SESSION_MISSING','Only your validated results can be shared.');
   return {kind:input.kind,id:input.id,score:row.score,character:row.character_key};
  }
- const row=(await q.query('SELECT id FROM marvel_lobby.arena_challenges WHERE id=$1 AND expires_at>now()',[input.id]))[0];
+ const row=(await q.query('SELECT id,character_key FROM marvel_lobby.arena_challenges WHERE id=$1 AND expires_at>now()',[input.id]))[0];
  if(!row)throw new ApiError(404,'CHALLENGE_UNAVAILABLE','This challenge is unavailable.');
- return {kind:input.kind,id:input.id,score:null,character:'spider-man'};
+ return {kind:input.kind,id:input.id,score:null,character:row.character_key};
 }
 export class Rift {
  constructor(private readonly accounts:Accounts,private readonly notify:(users:string[])=>void=()=>{}) {}
@@ -26,25 +27,28 @@ export class Rift {
   if(!(await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=7')).length)throw new ApiError(503,'ARENA_NOT_READY','Install the Rift Arena migration.');
   return action(q);
  });}
- async session(p:Principal,clientId:string,challengeId?:string) {return this.run(p,async q=> {
+ async session(p:Principal,clientId:string,challengeId?:string,character='spider-man',version='rift-2') {return this.run(p,async q=> {
   await q.query('SELECT pg_advisory_xact_lock(hashtextextended($1,77))',[p.userId]);
   const existing=(await q.query('SELECT * FROM marvel_lobby.arena_sessions WHERE user_id=$1 AND client_id=$2',[p.userId,clientId]))[0];
-  if(existing) { if(existing.abandoned_at||(existing.challenge_id??undefined)!==challengeId)throw new ApiError(409,'ARENA_CONFLICT','Session retry changed its challenge.');return this.sessionDto(existing); }
+  if(existing) { if(existing.abandoned_at||(existing.challenge_id??undefined)!==challengeId||(!challengeId&&existing.character_key!==character)||existing.game_version!==version)throw new ApiError(409,'ARENA_CONFLICT','Session retry changed its challenge.');return this.sessionDto(existing); }
+  if(!['rift-2',RIFT_VERSION].includes(version)||!RIFT_HEROES.includes(character)||(version==='rift-2'&&character!=='spider-man'&&!challengeId))invalid('Unsupported hero or ruleset.');
+  if(!challengeId&&character!=='spider-man'&&!(await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=8')).length)throw new ApiError(503,'ARENA_NOT_READY','Install the six-hero migration.');
   let seed=randomInt(-2147483648,2147483647);
   if(challengeId) {
    const challenge=(await q.query('SELECT * FROM marvel_lobby.arena_challenges WHERE id=$1 AND expires_at>now()',[challengeId]))[0];
-   if(!challenge||challenge.game_version!==RIFT_VERSION)throw new ApiError(404,'CHALLENGE_UNAVAILABLE','This challenge is unavailable.');
+   if(!challenge||challenge.game_version!==version)throw new ApiError(404,'CHALLENGE_UNAVAILABLE','This challenge is unavailable.');
    const prior=(await q.query('SELECT * FROM marvel_lobby.arena_sessions WHERE user_id=$1 AND challenge_id=$2',[p.userId,challengeId]))[0];
    if(prior) {
     if(prior.abandoned_at||(await q.query('SELECT session_id FROM marvel_lobby.arena_runs WHERE session_id=$1',[prior.id])).length)throw new ApiError(409,'CHALLENGE_ALREADY_PLAYED','Your attempt has already been used.');
     return this.sessionDto(prior);
-   }seed=challenge.seed;
+   }seed=challenge.seed;character=challenge.character_key;
+   if(character!=='spider-man'&&!(await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=8')).length)throw new ApiError(503,'ARENA_NOT_READY','Install the six-hero migration.');
   }
   const active=(await q.query(`SELECT id FROM marvel_lobby.arena_sessions s WHERE user_id=$1 AND abandoned_at IS NULL AND expires_at>now() AND started_at>now()-interval '12 minutes'
    AND NOT EXISTS(SELECT 1 FROM marvel_lobby.arena_runs r WHERE r.session_id=s.id)`,[p.userId]))[0];
   if(active)throw new ApiError(409,'ARENA_ACTIVE','Finish the previous competitive run or play offline practice.');
   const row=(await q.query(`INSERT INTO marvel_lobby.arena_sessions(id,user_id,client_id,seed,character_key,game_version,challenge_id,expires_at)
-   VALUES($1,$2,$3,$4,'spider-man',$5,$6,now()+interval '24 hours') RETURNING *`,[randomUUID(),p.userId,clientId,seed,RIFT_VERSION,challengeId??null]))[0]!;
+   VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '24 hours') RETURNING *`,[randomUUID(),p.userId,clientId,seed,character,version,challengeId??null]))[0]!;
   return this.sessionDto(row);
  });}
  private sessionDto(row:Row) {return {id:row.id,seed:row.seed,character:row.character_key,version:row.game_version,startedAt:row.started_at,expiresAt:row.expires_at,challengeId:row.challenge_id};}
@@ -53,7 +57,7 @@ export class Rift {
   const session=(await q.query('SELECT *,extract(epoch FROM now()-started_at) AS wall FROM marvel_lobby.arena_sessions WHERE id=$1 AND user_id=$2 FOR UPDATE',[id,p.userId]))[0];
   if(!session)throw new ApiError(404,'ARENA_SESSION_MISSING','This run does not belong to your account.');
   if(session.abandoned_at)throw new ApiError(409,'ARENA_CONFLICT','This session was abandoned.');
-  if(!['rift-1',RIFT_VERSION].includes(r.version)||r.version!==session.game_version||r.character!==session.character_key||r.seed!==session.seed)invalid('The run does not match its issued session.');
+  if(!['rift-1','rift-2',RIFT_VERSION].includes(r.version)||r.version!==session.game_version||r.character!==session.character_key||r.seed!==session.seed)invalid('The run does not match its issued session.');
   this.validate(r,Number(session.wall));
   const existing=(await q.query('SELECT * FROM marvel_lobby.arena_runs WHERE session_id=$1',[id]))[0];
   if(existing) {
@@ -87,34 +91,35 @@ export class Rift {
   let selected=0;for(const [key,value] of Object.entries(r.upgrades)) {if(!caps[key]||!Number.isInteger(value)||value<1||value>caps[key]!)invalid();selected+=value;}
   if(selected!==Math.min(r.level-1,Object.values(caps).reduce((a,b)=>a+b,0)))invalid('Upgrade choices do not match the achieved level.');
  }
- async leaderboard(p:Principal,mode:string,offset:number,character='spider-man') {return this.run(p,async q=> {
-  if(!['global','friends','weekly','character'].includes(mode)||!Number.isInteger(offset)||offset<0||offset>100000||character!=='spider-man')invalid();
+ async leaderboard(p:Principal,mode:string,offset:number,character='spider-man',version='rift-2') {return this.run(p,async q=> {
+  if(!['rift-2',RIFT_VERSION].includes(version)||!['global','friends','weekly','character'].includes(mode)||!Number.isInteger(offset)||offset<0||offset>100000||!RIFT_HEROES.includes(character))invalid();
   const where=`r.game_version=$1 ${mode==='weekly'?"AND r.submitted_at>=date_trunc('week',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'":''}
    ${mode==='character'?'AND r.character_key=$3':''} ${mode==='friends'?'AND (r.user_id=$2 OR EXISTS(SELECT 1 FROM marvel_lobby.follows f WHERE f.follower_id=$2 AND f.followed_id=r.user_id))':''}`;
   const cte=`WITH best AS(SELECT DISTINCT ON(r.user_id) r.* FROM marvel_lobby.arena_public_runs r WHERE ${where} ORDER BY r.user_id,r.score DESC,r.submitted_at,r.session_id),
    ranked AS(SELECT b.*,row_number() OVER(ORDER BY score DESC,submitted_at,user_id) AS position FROM best b)`;
   // Every mode binds all three common parameters, even when a condition is inactive.
   const fixedCte=cte.replace('WHERE r.game_version=$1','WHERE ($2::uuid IS NOT NULL) AND ($3::text IS NOT NULL) AND r.game_version=$1');
-  const rows=await q.query(`${fixedCte} SELECT r.*,p.username,p.display_name,p.avatar_id FROM ranked r JOIN marvel_lobby.public_profiles p ON p.id=r.user_id ORDER BY position LIMIT 31 OFFSET $4`,[RIFT_VERSION,p.userId,character,offset]);
-  const own=(await q.query(`${fixedCte} SELECT position,score FROM ranked WHERE user_id=$2`,[RIFT_VERSION,p.userId,character]))[0];
+  const rows=await q.query(`${fixedCte} SELECT r.*,p.username,p.display_name,p.avatar_id FROM ranked r JOIN marvel_lobby.public_profiles p ON p.id=r.user_id ORDER BY position LIMIT 31 OFFSET $4`,[version,p.userId,character,offset]);
+  const own=(await q.query(`${fixedCte} SELECT position,score FROM ranked WHERE user_id=$2`,[version,p.userId,character]))[0];
   return {items:rows.slice(0,30).map(r=>({id:r.session_id,userId:r.user_id,username:r.username,name:r.display_name,avatarId:r.avatar_id,score:r.score,position:Number(r.position),character:r.character_key})),next:rows.length>30?offset+30:null,own:own?{position:Number(own.position),score:own.score}:null};
  });}
- async profile(p:Principal,id:string) {return this.run(p,async q=> {
+ async profile(p:Principal,id:string,version='rift-2') {return this.run(p,async q=> {
   const row=(await q.query(`SELECT count(*) AS runs,coalesce(max(score),0) AS best,coalesce(max(duration),0) AS survival,coalesce(sum(kills),0) AS kills,coalesce(sum(bosses),0) AS bosses
-   FROM marvel_lobby.arena_public_runs WHERE user_id=$1 AND game_version=$2`,[id,RIFT_VERSION]))[0]!;
+   FROM marvel_lobby.arena_public_runs WHERE user_id=$1 AND game_version=$2`,[id,version]))[0]!;
   const position=(await q.query(`WITH best AS(SELECT DISTINCT ON(user_id) user_id,score,submitted_at FROM marvel_lobby.arena_public_runs WHERE game_version=$2 ORDER BY user_id,score DESC,submitted_at,session_id),
-   ranked AS(SELECT user_id,row_number() OVER(ORDER BY score DESC,submitted_at,user_id) AS position FROM best) SELECT position FROM ranked WHERE user_id=$1`,[id,RIFT_VERSION]))[0];
-  return {runs:Number(row.runs),best:Number(row.best),survival:Number(row.survival),kills:Number(row.kills),bosses:Number(row.bosses),globalPosition:position?Number(position.position):null,main:Number(row.runs)?'spider-man':null};
+   ranked AS(SELECT user_id,row_number() OVER(ORDER BY score DESC,submitted_at,user_id) AS position FROM best) SELECT position FROM ranked WHERE user_id=$1`,[id,version]))[0];
+  return {runs:Number(row.runs),best:Number(row.best),survival:Number(row.survival),kills:Number(row.kills),bosses:Number(row.bosses),globalPosition:position?Number(position.position):null,main:(await q.query('SELECT character_key FROM marvel_lobby.arena_public_runs WHERE user_id=$1 GROUP BY character_key ORDER BY count(*) DESC,character_key LIMIT 1',[id]))[0]?.character_key??null};
  });}
- async challenge(p:Principal,target:string,clientId:string) {return this.run(p,async q=> {
+ async challenge(p:Principal,target:string,clientId:string,character='spider-man',version='rift-2') {return this.run(p,async q=> {
   await q.query('SELECT pg_advisory_xact_lock(hashtextextended($1,77))',[p.userId]);
-  if(target===p.userId)invalid();
+  if(target===p.userId||!['rift-2',RIFT_VERSION].includes(version)||!RIFT_HEROES.includes(character)||(version==='rift-2'&&character!=='spider-man'))invalid();
+  if(character!=='spider-man'&&!(await q.query('SELECT version FROM marvel_lobby.schema_migrations WHERE version=8')).length)throw new ApiError(503,'ARENA_NOT_READY','Install the six-hero migration.');
   if(!(await q.query('SELECT id FROM marvel_lobby.public_profiles WHERE id=$1',[target])).length)throw new ApiError(404,'USER_NOT_FOUND','This profile is unavailable.');
   if(!(await q.query('SELECT 1 FROM marvel_lobby.follows WHERE follower_id=$1 AND followed_id=$2',[p.userId,target])).length)throw new ApiError(409,'ARENA_FOLLOW_REQUIRED','Follow this player before challenging them.');
   const existing=(await q.query('SELECT * FROM marvel_lobby.arena_challenges WHERE challenger_id=$1 AND client_id=$2',[p.userId,clientId]))[0];
-  if(existing) {if(existing.challenged_id!==target)throw new ApiError(409,'ARENA_CONFLICT','Challenge retry changed its player.');return existing;}
+  if(existing) {if(existing.challenged_id!==target||existing.character_key!==character||existing.game_version!==version)throw new ApiError(409,'ARENA_CONFLICT','Challenge retry changed its player.');return existing;}
   return (await q.query(`INSERT INTO marvel_lobby.arena_challenges(id,challenger_id,challenged_id,client_id,seed,character_key,game_version,expires_at)
-   VALUES($1,$2,$3,$4,$5,'spider-man',$6,now()+interval '7 days') RETURNING *`,[randomUUID(),p.userId,target,clientId,randomInt(-2147483648,2147483647),RIFT_VERSION]))[0];
+   VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '7 days') RETURNING *`,[randomUUID(),p.userId,target,clientId,randomInt(-2147483648,2147483647),character,version]))[0];
  });}
  async challenges(p:Principal,offset:number,id?:string) {return this.run(p,async q=> {
   const rows=await q.query(`SELECT c.*,a.username AS challenger,b.username AS challenged,

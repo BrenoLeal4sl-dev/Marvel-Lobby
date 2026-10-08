@@ -4,9 +4,13 @@ Atualizado em 07/10/2026.
 
 ## Rift Arena — 07/10/2026
 
-Polimento incremental: regras `rift-2`, twin-stick com previsão e disparo ao soltar, três cargas regenerativas, slow de 50% com refresh, melee em três golpes e tutorial persistido por usuário/repetível. Nível e onda separados, alertas de chefe, sequência de level up, melhorias localizadas, feedback de impacto e nova logo vetorial no menu, Home, tutorial, ranking, resultados e chat. Resultados antigos são preservados e não entram no ranking novo. Nenhum script adicional de banco.
+Rework `rift-3`: Spider-Man validado antes dos outros cinco kits. Joystick principal alterna teia/melee pelo Gadget; toque rápido mira no alvo próximo, golpe carregado consome uma carga compartilhada, Ultimate mira área e Hyper dura 15 segundos com regras de acerto por rajada. Iron Man, Hulk, Thor, Wolverine e Doctor Strange têm stats, estratégias, silhuetas e habilidades próprias. Seleção persistida por conta, maestria por personagem e explicações dos kits.
 
-Primeira arena jogável com Homem-Aranha, controles simultâneos, combate local, quatro tipos de inimigos, elites, chefes, evolução e resultados. Integração com sessões verificadas, rankings paginados, desafios assíncronos, estatísticas e compartilhamento no chat. Room 7 preserva os dados anteriores e armazena resultados por conta; PostgreSQL versão 7 foi aplicado e teve permissões verificadas na Aiven. Ver `RIFT_ARENA.md` para regras, testes e limitações: sprites provisórios, ausência de áudio e validação de consistência sem replay antifraude.
+Backend reconhece seis personagens em sessões, resultados, rankings e desafios; desafios preservam o mesmo herói para os participantes. Migração `database/009_rift_heroes.sql` amplia constraints existentes sem apagar dados. Testes de banco temporário: 43 passaram. Nenhuma mudança na Room 7, autenticação ou demais funcionalidades sociais. Clientes anteriores continuam criando sessões Spider-Man em rift-2; o Android atualizado solicita explicitamente rift-3. Resultados e rankings ficam separados por versão.
+
+Validação: 109 testes unitários Android e cinco testes nativos de controles, seleção, tutorial e persistência passaram; compilação passou; lint sem erros, com 79 avisos. A leitura do banco de produção encontrou versões 1 a 7: executar a migração 009 continua necessário para habilitar os novos heróis online. Maestria considera todo o histórico local, independentemente da janela de 100 resultados exibidos.
+
+O modo preservado continua sobrevivência solo com inimigos e desafios assíncronos. Não há times, Rift Core, duelos entre heróis ou multiplayer da Arena neste código. Detalhes, testes e limites em `RIFT_ARENA.md`.
 
 ## Extensões sociais e sincronização privada — 06/10/2026
 

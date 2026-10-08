@@ -62,6 +62,7 @@ class RiftActivity: AppCompatActivity() {
         val returningFromGame=game!=null
         game?.stopFrames();host.removeAllViews();game=null;overlay=null
         val state=vm.state.value
+        val hero=RiftCharacters.get(state.hero)
         val column=ui.column(20).apply { gravity=Gravity.CENTER_VERTICAL;background=ui.gradient(0xFF090E17.toInt(),0xFF451023.toInt(),0) }
         if(state.page!="lobby") {
             ui.add(column,ui.button(t("Back to arena","Voltar à arena"),false) { vm.page("lobby") },0,48)
@@ -70,13 +71,9 @@ class RiftActivity: AppCompatActivity() {
                 "settings"->{
                     ui.add(column,ui.title(t("Arena settings","Configurações da arena")),20)
                     ui.add(column,ui.button(t("Repeat tutorial","Repetir tutorial")) { vm.replayTutorial() },20,52)
-                    ui.add(column,ui.text(t("Three web charges. Slow refreshes without stacking. Melee has a three-hit chain.","Três cargas de teia. Slow renova sem somar. Golpes têm sequência de três."),14,ui.palette.muted),16)
+                    ui.add(column,ui.text(t("Drag and release to attack. Quick tap auto-aims. Gadget changes your kit; aim your Ultimate. Damage charges Hyper.","Arraste e solte para atacar. Toque rápido usa mira automática. Gadget altera seu kit; mire a Ultimate. Dano carrega Hyper."),14,ui.palette.muted),16)
                 }
-                "characters"->{
-                    ui.add(column,HeroPreview(this),16,230);ui.add(column,ui.title("Spider-Man"),12)
-                    ui.add(column,ui.text(t("Selected · hybrid kit: melee and webs.","Selecionado · kit híbrido: golpes e teias."),14),12)
-                    ui.add(column,ui.button(t("View character","Ver personagem")) {openLobby("character",RiftCharacters.spider.catalogId.toString())},20,52)
-                }
+                "characters"->characters(column)
             }
             if(state.busy)ui.add(column,ui.loading(),20)
             state.notice?.let { ui.add(column,ui.text(it,14,ui.palette.secondary),20) }
@@ -85,11 +82,11 @@ class RiftActivity: AppCompatActivity() {
         ui.add(column,com.example.marvellobby.rift.render.RiftIdentityView(this),0,60)
         ui.add(column,ui.label(t("SELECTED CHARACTER","PERSONAGEM SELECIONADO")),8)
         val heroHeight=(resources.configuration.screenHeightDp*.22f).toInt().coerceIn(100,165)
-        ui.add(column,HeroPreview(this),8,heroHeight)
-        ui.add(column,ui.text("Spider-Man",26,bold=true),8)
-        ui.add(column,ui.text(t("Webs. Mobility. Control.","Teias. Mobilidade. Controle."),13,ui.palette.secondary),6)
-        ui.add(column,ui.text("${t("Mastery","Maestria")} ${1+state.stats.kills/50} · ${state.stats.kills%50}/50 ${t("kills","eliminações")}",12,ui.palette.secondary),12)
-        ui.add(column,ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {max=50;progress=state.stats.kills%50;progressTintList=android.content.res.ColorStateList.valueOf(0xFFF02A3D.toInt())},6,6)
+        ui.add(column,HeroPreview(this,hero),8,heroHeight)
+        ui.add(column,ui.text(hero.name,26,bold=true),8)
+        ui.add(column,ui.text(heroInfo(hero.key,language=="pt").archetype,13,ui.palette.secondary),6)
+        ui.add(column,ui.text("${t("Mastery","Maestria")} ${1+vm.heroKills(hero.key)/50} · ${vm.heroKills(hero.key)%50}/50 ${t("kills","eliminações")}",12,ui.palette.secondary),12)
+        ui.add(column,ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {max=50;progress=vm.heroKills(hero.key)%50;progressTintList=android.content.res.ColorStateList.valueOf(0xFFF02A3D.toInt())},6,6)
         ui.add(column,ui.text("${t("Personal best","Recorde local")} ${state.stats.best} · ${t("Runs","Partidas")} ${state.stats.runs}",14,ui.palette.secondary),12)
         ui.add(column,ui.button(t("PLAY","JOGAR")) { vm.start() }.apply { tag="rift:play";isEnabled=!state.busy },18,56)
         if(vm.online)ui.add(column,ui.button(t("Offline practice","Treino offline"),false) { vm.start(practice=true) },12,52)
@@ -105,6 +102,33 @@ class RiftActivity: AppCompatActivity() {
         ui.add(column,ui.button(t("Back to Marvel Lobby","Voltar ao Marvel Lobby"),false) { finish() },16,52)
         host.addView(ScrollView(this).apply { isFillViewport=true;addView(column) },FrameLayout.LayoutParams(-1,-1))
         if(returningFromGame){column.alpha=0f;column.translationY=ui.dp(12).toFloat();column.animate().alpha(1f).translationY(0f).setDuration(220).start()}
+    }
+    private fun characters(column:LinearLayout) {
+        val state=vm.state.value;val selected=RiftCharacters.get(state.previewHero)
+        ui.add(column,ui.title(t("Choose your playstyle","Escolha como jogar")),20)
+        val strip=ui.row()
+        RiftCharacters.all.forEach { h->
+            val item=ui.column(10).apply{isClickable=true;contentDescription=h.name;setOnClickListener{vm.inspectHero(h.key)};background=ui.shape(if(h.key==selected.key)ui.palette.raised else ui.palette.surface,border=h.key==selected.key)}
+            ui.add(item,HeroPreview(this,h),0,90)
+            ui.add(item,ui.text(h.name,12,bold=true),6)
+            ui.add(item,ui.text("${t("Mastery","Maestria")} ${1+vm.heroKills(h.key)/50}",10,ui.palette.muted),4)
+            ui.add(item,ui.button(if(h.key==state.hero)t("Selected","Selecionado")else t("Inspect","Ver kit"),false){vm.inspectHero(h.key)}.apply{tag="rift:inspect:${h.key}"},8,40)
+            strip.addView(item,LinearLayout.LayoutParams(ui.dp(154),-2).apply{marginEnd=ui.dp(10)})
+        }
+        ui.add(column,HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;addView(strip);post{scrollTo(RiftCharacters.all.indexOf(selected)*ui.dp(164),0)}},16)
+        ui.add(column,HeroPreview(this,selected).apply{tag="rift:preview:${selected.key}"},20,200)
+        val info=heroInfo(selected.key,language=="pt")
+        ui.add(column,ui.title(selected.name),8);ui.add(column,ui.label(info.archetype),8)
+        val kills=vm.heroKills(selected.key)
+        ui.add(column,ui.text("${t("Mastery level","Nível de maestria")} ${1+kills/50} · ${kills%50}/50 ${t("kills","eliminações")} · ${t("Available","Disponível")}",12,ui.palette.secondary),12)
+        ui.add(column,ui.text(info.summary,14,ui.palette.muted),12)
+        ui.add(column,ui.text(t("Base kit indicators","Indicadores do kit base"),11,ui.palette.muted),14)
+        val metrics=listOf(t("Offense","Ofensiva") to ((if(selected.hasRanged&&selected.key!="thor")selected.webDamage/selected.shotCooldown else selected.meleeDamage/selected.meleeInterval)/30f).toInt().coerceIn(1,5),
+            t("Defense","Defesa") to (selected.health/37).toInt().coerceIn(1,5),t("Mobility","Mobilidade") to ((selected.speed-145)/18).toInt().coerceIn(1,5),t("Control","Controle") to info.control,t("Difficulty","Dificuldade") to info.difficulty)
+        metrics.forEach{(label,value)->ui.add(column,ui.text(label,12),12);ui.add(column,ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply{max=5;progress=value;progressTintList=android.content.res.ColorStateList.valueOf(selected.color)},4,7)}
+        listOf(t("Attack","Ataque") to info.attack,"Gadget" to info.gadget,"Ultimate" to info.ultimate,"Hypercharge" to info.hyper).forEach{(label,value)->ui.add(column,ui.text(label,15,bold=true),18);ui.add(column,ui.text(value,13,ui.palette.muted),6)}
+        if(selected.catalogId>0)ui.add(column,ui.button(t("View character","Ver personagem"),false){openLobby("character",selected.catalogId.toString())},20,48)
+        ui.add(column,ui.button(t("SELECT","SELECIONAR")){vm.selectHero(selected.key)}.apply{tag="rift:select"},24,56)
     }
     private fun attachGame(engine: RiftEngine) {
         soundedPhase=null
@@ -133,12 +157,12 @@ class RiftActivity: AppCompatActivity() {
                 ui.add(panel,ui.text("${t("LEVEL UP","SUBIU DE NÍVEL")} · LV ${engine.level}",22,ui.palette.secondary,true),8)
                 ui.add(panel,ui.text(t("Combat paused. Choose one upgrade.","Combate pausado. Escolha uma melhoria."),12,ui.palette.muted),6)
                 engine.choices.forEach { upgrade ->
-                    val description=upgrade.description.split(" / ").let { if(language=="pt")it.last()else it.first() }
+                    val description=upgrade.descriptionFor(language,engine.character.key)
                     val rarity=if(language=="pt")when(upgrade.rarity) { Rarity.COMMON->"COMUM";Rarity.RARE->"RARO";Rarity.EPIC->"ÉPICO";Rarity.LEGENDARY->"LENDÁRIO" }else upgrade.rarity.name
                     val choice=ui.column(12).apply { background=ui.shape(ui.palette.raised,border=true) }
                     val tint=when(upgrade.rarity) {Rarity.COMMON->0xFFBDCBDA.toInt();Rarity.RARE->0xFF75B6FF.toInt();Rarity.EPIC->0xFFD0A0FF.toInt();Rarity.LEGENDARY->0xFFFFCF72.toInt()}
                     ui.add(choice,ui.text("$rarity · ${engine.rank(upgrade)+1}/${upgrade.cap}",10,tint,true),0)
-                    ui.add(choice,ui.text(upgrade.displayName(language),18,bold=true),6)
+                    ui.add(choice,ui.text(upgrade.displayName(language,engine.character.key),18,bold=true),6)
                     ui.add(choice,ui.text(description,12,ui.palette.muted),6)
                     ui.add(choice,ui.button(t("Choose","Escolher")) { if(engine.choose(upgrade))showPhase(engine.phase) },8,40)
                     ui.add(panel,choice,10)
@@ -196,7 +220,7 @@ class RiftActivity: AppCompatActivity() {
     private fun ranking(column: LinearLayout) {
         val state=vm.state.value;ui.add(column,ui.title("Rift Ranking"),20)
         val tabs=ui.row()
-        listOf("global" to "Global","friends" to t("Following","Seguidos"),"weekly" to t("Weekly","Semanal"),"character" to "Spider-Man").forEach { (mode,label)->
+        listOf("global" to "Global","friends" to t("Following","Seguidos"),"weekly" to t("Weekly","Semanal"),"character" to RiftCharacters.get(state.hero).name).forEach { (mode,label)->
             tabs.addView(ui.button(label,state.mode==mode) { vm.ranking(mode) },LinearLayout.LayoutParams(-2,-2).apply { marginEnd=ui.dp(8) })
         }
         ui.add(column,HorizontalScrollView(this).apply { addView(tabs);isHorizontalScrollBarEnabled=false },16)
@@ -218,8 +242,8 @@ class RiftActivity: AppCompatActivity() {
             val status=when(row.status) {"synced"->t("Ranked","No ranking");"pending"->t("Pending upload","Envio pendente");"rejected"->t("Local only","Somente local");else->t("Practice","Treino")}
             val box=ui.column(16).apply { background=ui.shape(ui.palette.surface) }
             ui.add(box,ui.text("${result.score} · $status",22,bold=true),0)
-            ui.add(box,ui.text("$timestamp\n${result.duration.toInt()/60}:${(result.duration.toInt()%60).toString().padStart(2,'0')} · ${result.kills} ${t("kills","eliminações")} · LV ${result.level}",13,ui.palette.muted),10)
-            if(result.upgrades.isNotEmpty())ui.add(box,ui.text(result.upgrades.entries.joinToString(" · ") { "${Upgrade.valueOf(it.key).displayName(language)} ${it.value}" },12,ui.palette.secondary),10)
+            ui.add(box,ui.text("${RiftCharacters.get(result.character).name} · $timestamp\n${result.duration.toInt()/60}:${(result.duration.toInt()%60).toString().padStart(2,'0')} · ${result.kills} ${t("kills","eliminações")} · LV ${result.level}",13,ui.palette.muted),10)
+            if(result.upgrades.isNotEmpty())ui.add(box,ui.text(result.upgrades.entries.joinToString(" · ") { "${Upgrade.valueOf(it.key).displayName(language,result.character)} ${it.value}" },12,ui.palette.secondary),10)
             if(row.status=="synced" && row.sessionId!=null)ui.add(box,ui.button(t("Share result","Compartilhar resultado"),false) { openLobby("shareResult",row.sessionId!!,result.score) },12,48)
             ui.add(column,box,16)
         }
@@ -249,21 +273,13 @@ class RiftActivity: AppCompatActivity() {
     }
 }
 
-/** Lobby preview shares the same provisional silhouette language without starting a simulation. */
-private class HeroPreview(context: android.content.Context): View(context) {
+/** Animated lobby portrait uses the same equipment silhouettes as combat. */
+private class HeroPreview(context:android.content.Context,private val hero:CharacterDefinition=RiftCharacters.spider):View(context) {
     private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     private val born=android.os.SystemClock.uptimeMillis()
-    override fun onDraw(c: android.graphics.Canvas) {
-        c.save();c.translate(width/2f,height/2f+kotlin.math.sin((android.os.SystemClock.uptimeMillis()-born)/800.0).toFloat()*4*resources.displayMetrics.density);val s=height/120f;c.scale(s,s)
-        paint.color=0x334C6CF0;c.drawCircle(0f,0f,50f,paint)
-        paint.color=0xFF2859AE.toInt();paint.strokeWidth=14f;paint.strokeCap=android.graphics.Paint.Cap.ROUND
-        c.drawLine(-7f,8f,-15f,40f,paint);c.drawLine(7f,8f,15f,40f,paint)
-        c.drawRoundRect(-18f,-24f,18f,16f,10f,10f,paint)
-        paint.color=0xFFF02A3D.toInt();c.drawRoundRect(-11f,-24f,11f,5f,6f,6f,paint)
-        c.drawLine(-16f,-17f,-32f,2f,paint);c.drawLine(16f,-17f,32f,2f,paint);c.drawCircle(0f,-35f,16f,paint)
-        paint.color=0xFFF3F4FC.toInt();paint.strokeWidth=5f;c.drawLine(-11f,-39f,-4f,-33f,paint);c.drawLine(11f,-39f,4f,-33f,paint)
-        paint.color=0xFF090E17.toInt();paint.strokeWidth=2f;c.drawOval(-3f,-13f,3f,-5f,paint)
-        for(i in 0..3){val yy=-19f+i*5;c.drawLine(0f,-10f,-7f,yy,paint);c.drawLine(-7f,yy,-10f,yy+4,paint);c.drawLine(0f,-10f,7f,yy,paint);c.drawLine(7f,yy,10f,yy+4,paint)}
-        c.restore();postInvalidateDelayed(32)
+    override fun onDraw(c:android.graphics.Canvas) {
+        c.save();c.translate(width/2f,height/2f+kotlin.math.sin((android.os.SystemClock.uptimeMillis()-born)/800.0).toFloat()*3*resources.displayMetrics.density)
+        val scale=height/90f;c.scale(scale,scale);paint.color=(hero.color and 0x00FFFFFF) or 0x22000000;paint.style=android.graphics.Paint.Style.FILL;c.drawCircle(0f,0f,39f,paint)
+        com.example.marvellobby.rift.render.HeroArt.draw(c,paint,hero);c.restore();postInvalidateDelayed(40)
     }
 }

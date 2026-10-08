@@ -20,6 +20,7 @@ export class TestDatabase implements Database {
     await engine.exec(readFileSync(fileURLToPath(new URL('006_social_extensions.sql',root)),'utf8'));
     await engine.exec(readFileSync(fileURLToPath(new URL('007_private_sync.sql',root)),'utf8'));
     await engine.exec(readFileSync(fileURLToPath(new URL('008_rift_arena.sql',root)),'utf8'));
+    await engine.exec(readFileSync(fileURLToPath(new URL('009_rift_heroes.sql',root)),'utf8'));
     await engine.exec('RESET ROLE');
     return new TestDatabase(engine);
   }

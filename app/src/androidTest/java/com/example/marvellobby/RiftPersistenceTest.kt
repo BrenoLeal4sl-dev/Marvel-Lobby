@@ -19,7 +19,7 @@ class RiftPersistenceTest {
         try {
             repeat(105) { i ->
                 db.rift().insert(StoredRiftRun().apply {
-                    id="run-$i";owner="alice";payload="{}";status="pending"
+                    id="run-$i";owner="alice";payload="{\"character\":\"${if(i%2==0)"spider-man" else "hulk"}\",\"kills\":2}";status="pending"
                     endedAt=i.toLong();score=i;duration=10f;kills=2;bosses=1
                 })
             }
@@ -32,6 +32,9 @@ class RiftPersistenceTest {
             val totals=db.rift().totals("alice")
             assertEquals(105,totals.runs);assertEquals(104,totals.best)
             assertEquals(210,totals.kills);assertEquals(105,totals.bosses)
+            assertEquals(105,db.rift().masteryRows("alice").size)
+            assertEquals(53,db.rift().masteryRows("alice").count{org.json.JSONObject(it.payload).getString("character")=="spider-man"})
+            assertEquals(1,db.rift().masteryRows("bob").size)
             assertEquals(20,db.rift().pending("alice").size)
             assertEquals("run-0",db.rift().pending("alice").first().id)
             db.rift().status("alice","run-0","synced")
